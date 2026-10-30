@@ -37,9 +37,7 @@ def exibir(registro):
     )
 
 def limpar(campos):
-    campos["nome"] = ""
-    campos["sobrenome"] = ""
-    campos["idade"] = ""
+    pass
 
 
 def criar_janela():
@@ -80,8 +78,6 @@ def criar_janela():
         aviso.configure(text="Consulta ao registro confirmada.")
 
     def ao_limpar():
-        # TODO: limpar campos e Entry; manter registro e consulta intactos.
-        limpar(campos)
         entrada_nome.delete(0, tk.END)
         entrada_sobrenome.delete(0, tk.END)
         entrada_idade.delete(0, tk.END)
