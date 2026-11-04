@@ -38,7 +38,7 @@ As cotações desta tabela são fictícias. Mantenha a ordem quando o caso indic
 Percorri campos e botões com Tab/Shift+Tab:
 Usei o teclado para acionar um botão:
 Mensagem que precisei melhorar:
-Colega que testou (código combinado):
+Colega que testou (código combinado):ronaldo
 
 ## Fechamento sem consulta
 Por que a cotação precisa ser maior que zero, mas o valor em reais pode ser zero?

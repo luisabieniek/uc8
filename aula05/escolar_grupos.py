@@ -5,23 +5,59 @@ from math import isfinite
 
 
 def calcular(campos, registro):
-    # TODO: normalizar nome/turma e recusar texto vazio.
-    # TODO: conferir a presença de exatamente cinco notas.
-    # TODO: converter cada texto, validar de 0 a 10 e criar uma nova lista.
-    # TODO: calcular a média com sum e len.
-    # TODO: confirmar nome, turma, notas e média somente após validar tudo.
-    return "Complete a função calcular."
+    nome = campos["nome"].strip()
+    turma = campos["turma"].strip()
+    textos_notas = campos["notas"]
 
+    if not nome:
+        return "Informe o nome."
+
+    if not turma:
+        return "Informe a turma."
+
+    if len(textos_notas) != 5:
+        return "Informe exatamente cinco notas."
+
+    notas = []
+
+    for texto in textos_notas:
+        try:
+            nota = float(texto.strip().replace(",", "."))
+        except ValueError:
+            return "Todas as notas devem ser números válidos."
+
+        if not isfinite(nota):
+            return "As notas devem ser números finitos."
+
+        if nota < 0 or nota > 10:
+            return "As notas devem estar entre 0 e 10."
+
+        notas.append(nota)
+
+    media = sum(notas) / len(notas)
+    
+
+    registro.update({
+        "nome": nome,
+        "turma": turma,
+        "notas": notas,
+        "media": media
+    })
+
+    return "Média calculada e registro confirmado."
 
 def exibir(registro):
-    # TODO: tratar ausência; consultar apenas o último registro confirmado.
-    # TODO: mostrar identificação e cinco notas usadas, com média em uma casa.
-    return "Complete a função exibir."
-
+    if not registro:
+        return "Nenhum registro confirmado nesta sessão."
+    
+    return (
+        f"Aluno: {registro['nome']}\n"
+        f"Turma: {registro['turma']}\n"
+        f"Notas: {', '.join(f'{nota:.1f}' for nota in registro['notas'])}\n"
+        f"Média: {registro['media']:.1f}"
+    )
 
 def limpar(campos):
-    # TODO: esvaziar nome, turma e os cinco textos de notas.
-    # O registro confirmado não é recebido por esta função.
     pass
 
 
@@ -58,16 +94,23 @@ def criar_janela():
         entradas_notas.append(entrada)
 
     def ao_calcular():
-        # TODO: reutilizar a leitura, validação e confirmação da sua A04.
-        aviso.configure(text="Complete o callback Calcular média.")
+        campos["nome"] = entrada_nome.get()
+        campos["turma"] = entrada_turma.get()
+        campos["notas"] = [entrada.get() for entrada in entradas_notas]
+
+        mensagem = calcular(campos, registro)
+
+        aviso.configure(text=mensagem)
 
     def ao_exibir():
-        # TODO: consultar o último confirmado; na prática 2, abrir a Toplevel.
-        aviso.configure(text="Complete o callback de consulta.")
+        resultado.configure(text=exibir(registro))
 
     def ao_limpar():
-        # TODO: limpar as sete entradas sem apagar o último confirmado.
-        aviso.configure(text="Complete o callback Limpar campos.")
+        entrada_nome.delete(0, tk.END)
+        entrada_turma.delete(0, tk.END)
+        for entrada in entradas_notas:
+            entrada.delete(0, tk.END)
+        aviso.configure(text="Campos limpos.")
 
     ttk.Button(acoes, text="Calcular média", command=ao_calcular).grid(row=8, column=0, padx=4, pady=6)
     ttk.Button(acoes, text="Exibir", command=ao_exibir).grid(row=8, column=1, padx=4, pady=6)
