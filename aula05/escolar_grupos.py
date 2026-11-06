@@ -72,13 +72,17 @@ def criar_janela():
     campos = {"nome": "", "turma": "", "notas": ["", "", "", "", ""]}
     registro = {}
     ttk.Label(base, text="Sistema escolar fictício — organize os campos").grid(row=0, column=0, columnspan=2, pady=6, sticky="w")
-    # TODO: criar LabelFrame para identificação e notas e Frame para ações.
-    # TODO: posicionar os grupos na base e configurar expansão das colunas.
-    # A disposição inicial é plana; substitua os pais e ajuste as linhas internas.
-    identificacao = base
-    grupo_notas = base
-    acoes = base
-    base.columnconfigure(1, weight=1)
+    identificacao = ttk.LabelFrame(base, text="Identificação", padding=10)
+    grupo_notas = ttk.LabelFrame(base, text="Notas do Aluno", padding=10)
+    acoes = ttk.Frame(base, padding=5)
+    
+    identificacao.grid(row=1, column=0, sticky="nsew", pady=4)
+    grupo_notas.grid(row=2, column=0, sticky="nsew", pady=4)
+    acoes.grid(row=3, column=0, sticky="ew", pady=6)
+    
+    identificacao.columnconfigure(1, weight=1)
+    grupo_notas.columnconfigure(1, weight=1)
+    acoes.columnconfigure((0, 1), weight=1)
 
     ttk.Label(identificacao, text="Nome fictício:").grid(row=1, column=0, padx=6, pady=4, sticky="w")
     entrada_nome = ttk.Entry(identificacao)

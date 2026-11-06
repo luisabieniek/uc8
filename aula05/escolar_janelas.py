@@ -39,25 +39,31 @@ def calcular(campos, registro):
     media = sum(notas) / len(notas)
     
 
-    registro.update({
+    registro.append({
         "nome": nome,
         "turma": turma,
         "notas": notas,
         "media": media
     })
 
+    return f"Média calculada com sucesso: {media:.1f}"
 
-def exibir(registro):
-    if not registro:
+
+def exibir(registros):
+    if not registros:
         return "Nenhum registro confirmado nesta sessão."
-    
-    return (
-        f"Aluno: {registro['nome']}\n"
-        f"Turma: {registro['turma']}\n"
-        f"Notas: {', '.join(f'{nota:.1f}' for nota in registro['notas'])}\n"
-        f"Média: {registro['media']:.1f}"
-    )
 
+    texto = ""
+
+    for registro in registros:
+        texto += (
+            f"Aluno: {registro['nome']}\n"
+            f"Turma: {registro['turma']}\n"
+            f"Notas: {', '.join(f'{nota:.1f}' for nota in registro['notas'])}\n"
+            f"Média: {registro['media']:.1f}\n\n"
+        )
+
+    return texto
 
 def limpar(campos):
     pass
@@ -83,12 +89,12 @@ def abrir_consulta(principal, registro):
 
         return None
     
-    texto_confimado = exibir(registro)
+    texto_confirmado = exibir(registro)
 
     consulta = tk.Toplevel(principal)
     consulta.title("Consulta escolar — A05")
     
-    tk.Label(consulta, text=texto_confimado, justify="left", padx=10, pady=10).pack(fill="both", expand=True)
+    tk.Label(consulta, text=texto_confirmado, justify="left", padx=10, pady=10).pack(fill="both", expand=True)
     tk.Button(consulta, text="Fechar", command=consulta.destroy).pack(pady=10)
 
     consulta.lift()
@@ -111,7 +117,7 @@ def criar_janela():
     base.grid(row=0, column=0, sticky="nsew")
     base.columnconfigure(0, weight=1)
     campos = {"nome": "", "turma": "", "notas": ["", "", "", "", ""]}
-    registro = {}
+    registro = []
     inserir_marca(base).grid(row=0, column=0, columnspan=2, pady=6, sticky="w")
 
     identificacao = ttk.LabelFrame(base, text="Identificação", padding=10)
@@ -149,13 +155,15 @@ def criar_janela():
         aviso.configure(text=mensagem)
 
     def ao_exibir():
-        resultado.configure(text=exibir(registro))
+        abrir_consulta(janela, registro)
 
     def ao_limpar():
         entrada_nome.delete(0, tk.END)
         entrada_turma.delete(0, tk.END)
+
         for entrada in entradas_notas:
             entrada.delete(0, tk.END)
+
         aviso.configure(text="Campos limpos.")
 
     ttk.Button(acoes, text="Calcular média", command=ao_calcular).grid(row=8, column=0, padx=4, pady=6)
