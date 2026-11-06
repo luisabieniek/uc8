@@ -5,6 +5,14 @@ def verificar_independencia():
     lia = Aluno()
     rui = Aluno()
     # TODO: comparar os objetos, suas listas, médias e alterações independentes.
+    assert lia is not rui
+    assert lia.notas is not rui.notas
+
+    lia.atualizar("Lia", "A", ["8", "9", "7", "10", "6"])
+    rui.atualizar("Rui", "B", ["5", "6", "7", "8", "9"])
+
+    assert
+
     # TODO: usar assert nos resultados esperados; só então retornar True.
     return False
 
