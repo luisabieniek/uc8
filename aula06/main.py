@@ -2,13 +2,24 @@ import tkinter as tk
 from tkinter import ttk
 from pathlib import Path
 from aluno import Aluno
+from tkinter import PhotoImage
+from tkinter import ttk, messagebox
 
 
 def inserir_marca(container, caminho=None):
     # TODO: procurar marca-a06.png ao lado do script com pathlib.
     # TODO: usar PhotoImage e conservar uma referência enquanto o rótulo existir.
     # TODO: manter texto se o PNG não existir ou não puder ser lido.
-    return ttk.Label(container, text="Sistema escolar fictício — A06")
+    caminho = caminho or Path(__file__).parent / "abcd.png"
+
+    try:
+        imagem = PhotoImage(file=caminho)
+        rotulo = ttk.Label(container, image=imagem)
+        rotulo.image = imagem 
+        return rotulo   
+    except Exception as e:
+        print(f"Erro ao carregar a imagem: {e}")
+        return ttk.Label(container, text="Sistema escolar fictício — A06")
 
 
 def abrir_consulta(principal, aluno):
@@ -16,7 +27,29 @@ def abrir_consulta(principal, aluno):
     # TODO: obter o texto do confirmado no instante da abertura.
     # TODO: criar Toplevel e organizar sua consulta somente de leitura.
     # TODO: botão, X e Escape devem fechar somente a consulta.
-    return None
+    if not aluno.notas:
+        messagebox.showinfo("Consulta escolar", "Nenhum registro confirmado nesta sessão.",
+                            parent=principal)
+
+        return None
+    
+    texto_confirmado = aluno.resumo()
+
+    consulta = tk.Toplevel(principal)
+    consulta.title("Consulta escolar — A06")
+    
+    tk.Label(consulta, text=texto_confirmado, justify="left", padx=10, pady=10).pack(fill="both", expand=True)
+    tk.Button(consulta, text="Fechar", command=consulta.destroy).pack(pady=10)
+
+    consulta.lift()
+    consulta.focus_force()
+    consulta.focus_set()
+    consulta.bind("<Escape>", lambda event: consulta.destroy())
+    consulta.protocol("WM_DELETE_WINDOW", consulta.destroy)
+    consulta.transient(principal)
+    consulta.grab_set()
+        
+    return consulta
 
 
 def criar_janela():
@@ -32,10 +65,22 @@ def criar_janela():
     # TODO: criar LabelFrame para identificação e notas e Frame para ações.
     # TODO: posicionar os grupos na base e configurar expansão das colunas.
     # A disposição inicial é plana; substitua os pais e ajuste as linhas internas.
-    identificacao = base
-    grupo_notas = base
-    acoes = base
-    base.columnconfigure(1, weight=1)
+
+    identificacao = ttk.LabelFrame(
+        base, text="Identificação", padding=10
+    )
+    grupo_notas = ttk.LabelFrame(
+        base, text="Notas do Aluno", padding=10
+    )
+    acoes = ttk.Frame(base, padding=5)
+
+    identificacao.grid(row=1, column=0, sticky="nsew", pady=4)
+    grupo_notas.grid(row=2, column=0, sticky="nsew", pady=4)
+    acoes.grid(row=3, column=0, sticky="ew", pady=6)
+
+    identificacao.columnconfigure(1, weight=1)
+    grupo_notas.columnconfigure(1, weight=1)
+    acoes.columnconfigure((0, 1), weight=1)
 
     ttk.Label(identificacao, text="Nome fictício:").grid(row=1, column=0, padx=6, pady=4, sticky="w")
     entrada_nome = ttk.Entry(identificacao)
@@ -53,15 +98,29 @@ def criar_janela():
     def ao_calcular():
         # TODO: ler os sete campos e chamar aluno.atualizar com os textos.
         # TODO: mostrar a mensagem e aluno.resumo; nunca escrever atributos aqui.
+        nome = entrada_nome.get()
+        turma = entrada_turma.get()
+        notas = [entrada.get() for entrada in entradas_notas]
+
+        mensagem = aluno.atualizar(nome, turma, notas)
+
+        aviso.configure(text=mensagem)
+
+        if mensagem == "Aluno atualizado com sucesso.":
+            resultado.configure(text=aluno.resumo())
         aviso.configure(text="Integração com o modelo ainda não implementada.")
 
     def ao_exibir():
         # TODO: adaptar sua consulta da A05 para receber aluno.
-        aviso.configure(text="Consulta ainda não integrada ao modelo.")
+        abrir_consulta(janela, aluno)
 
     def ao_limpar():
         # TODO: limpar só os campos e devolver foco, preservando aluno e consultas.
-        aviso.configure(text="Limpeza ainda não implementada.")
+        entrada_nome.delete(0, tk.END)
+        entrada_turma.delete(0, tk.END)
+        for entrada in entradas_notas:
+            entrada.delete(0, tk.END)
+        aviso.configure(text="Campos limpos.")
 
     ttk.Button(acoes, text="Calcular média", command=ao_calcular).grid(row=8, column=0, padx=4, pady=6)
     ttk.Button(acoes, text="Consultar", command=ao_exibir).grid(row=8, column=1, padx=4, pady=6)

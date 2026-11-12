@@ -4,10 +4,10 @@ from math import isfinite
 class Aluno:
     def __init__(self):
         # TODO: criar nome/turma vazios e uma lista de notas nova por objeto.
-        self.nome = None
-        self.turma = None
-        self.notas = None
-        self.media = None
+        self.nome = ""
+        self.turma = ""
+        self.notas = []
+        # self.media = ""
 
     def atualizar(self, nome, turma, notas_texto):
         # TODO: adaptar sua validação da A05; receber textos, nunca Entry.
@@ -36,26 +36,30 @@ class Aluno:
             
             novas_notas.append(nota)
 
-        media = sum(novas_notas) / len(novas_notas)
+        # media = sum(novas_notas) / len(novas_notas)
 
         # TODO: confirmar os três atributos apenas depois de validar tudo.
         self.nome = nome
         self.turma = turma
         self.notas = novas_notas
-        self.media = media
+        # self.media = media
         
-        return "Dados atualizados com sucesso."
+        return "Aluno atualizado com sucesso."
+    
+    def calcular_media(self):
+        if len(self.notas) == 0:
+            return None
+
+        return round(sum(self.notas) / len(self.notas), 1)
+    
 
     def resumo(self):
-        # TODO: somente atributos confirmados; uma casa apenas na apresentação.
-        if not self.nome or not self.turma or not self.notas:
+        if len(self.notas) == 0:
             return "Resumo não disponível; dados incompletos."
-        
-        media = sum(self.notas) / len(self.notas)
 
         return (
             f"Aluno: {self.nome}\n"
             f"Turma: {self.turma}\n"
             f"Notas: {', '.join(f'{nota:.1f}' for nota in self.notas)}\n"
-            f"Média: {self.media:.1f}"
+            f"Média: {self.calcular_media():.1f}"
         )
