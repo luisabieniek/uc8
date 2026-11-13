@@ -27,7 +27,7 @@ def abrir_consulta(principal, aluno):
     # TODO: obter o texto do confirmado no instante da abertura.
     # TODO: criar Toplevel e organizar sua consulta somente de leitura.
     # TODO: botão, X e Escape devem fechar somente a consulta.
-    if not aluno.notas:
+    if not aluno.registros:
         messagebox.showinfo("Consulta escolar", "Nenhum registro confirmado nesta sessão.",
                             parent=principal)
 
@@ -107,8 +107,7 @@ def criar_janela():
         aviso.configure(text=mensagem)
 
         if mensagem == "Aluno atualizado com sucesso.":
-            resultado.configure(text=aluno.resumo())
-        aviso.configure(text="Integração com o modelo ainda não implementada.")
+            aviso.configure(text=mensagem)
 
     def ao_exibir():
         # TODO: adaptar sua consulta da A05 para receber aluno.
