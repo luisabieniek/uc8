@@ -12,14 +12,14 @@ Desenho dos módulos, dependências e duração dos dados:
 Para cada caso, registre previsão, observado, correção e nova execução.
 
 T01 — Duas frutas a R$5,00 e três leites a R$7,50: subtotal 10,00 +22,50 =32,50.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: 10 + 22,50 = 32,50
+Observado: tudo ok
+Correção/reteste ou pendência: nada
 
 T02 — Pedido novo sem itens e sem compartilhar a coleção do anterior.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: nao retorna nada 
+Observado: avisa que quantodade eh invalida
+Correção/reteste ou pendência: nada
 
 T03 — Adicionar o mesmo código soma quantidades; nome igual com ID distinto continua distinto.
 Previsão:
@@ -32,14 +32,14 @@ Observado:
 Correção/reteste ou pendência:
 
 T05 — Quantidade vazia, texto, 0, negativa, decimal ou acima de 999: recusar sem alteração.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: nao aceita vazio nem texto nem 0 
+Observado: nao aceita vazio nem texto nem 0 aceita maior que 999
+Correção/reteste ou pendência: nada
 
 T06 — Acumular quantidade acima de 999: preservar a linha anterior.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: acumular
+Observado: acumulou
+Correção/reteste ou pendência: nada
 
 T07 — Total recalculado depois de cada inclusão válida.
 Previsão:
