@@ -42,9 +42,9 @@ Observado: acumulou
 Correção/reteste ou pendência: nada
 
 T07 — Total recalculado depois de cada inclusão válida.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: deve corresponder a soma dos ubtotais de todos os itens presentes no pedido
+Observado: correspondeuu
+Correção/reteste ou pendência: nada
 
 T08 — Percurso por teclado, rótulos, expansão e execução sem imagem.
 Previsão:
