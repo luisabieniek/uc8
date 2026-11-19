@@ -1,0 +1,32 @@
+[
+    {
+        "id": "P001",
+        "nome": "Pizza de Mussarela",
+        "preco_centavos": 4500
+    },
+    {
+        "id": "P002",
+        "nome": "Pizza de Calabresa",
+        "preco_centavos": 4800
+    },
+    {
+        "id": "P003",
+        "nome": "Pizza de Frango",
+        "preco_centavos": 5000
+    },
+    {
+        "id": "P004",
+        "nome": "Pizza Portuguesa",
+        "preco_centavos": 5200
+    },
+    {
+        "id": "B001",
+        "nome": "Refrigerante 2L",
+        "preco_centavos": 1200
+    },
+    {
+        "id": "B002",
+        "nome": "Água",
+        "preco_centavos": 500
+    }
+]
