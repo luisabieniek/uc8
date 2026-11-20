@@ -12,19 +12,19 @@ Desenho dos módulos, dependências e duração dos dados:
 Para cada caso, registre previsão, observado, correção e nova execução.
 
 T01 — Ausente retorna coleção vazia sem criar arquivo silenciosamente.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: mostrar catalogo vazio sem criar arquivo
+Observado: leitura retona none 
+Correção/reteste ou pendência: nada
 
 T02 — UTF-8 conserva Picolé/limão.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: manter os acentos
+Observado: manteve os acentos
+Correção/reteste ou pendência: nada
 
 T03 — JSON malformado e conteúdo com encoding inválido não são sobrescritos.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: recusar json malformado
+Observado: leitura recusou os dois casos
+Correção/reteste ou pendência: nada
 
 T04 — Estrutura incorreta, IDs repetidos e preço inválido são rejeitados.
 Previsão:

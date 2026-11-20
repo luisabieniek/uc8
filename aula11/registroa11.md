@@ -12,49 +12,49 @@ Desenho dos módulos, dependências e duração dos dados:
 Para cada caso, registre previsão, observado, correção e nova execução.
 
 T01 — Vazio não finaliza.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: pedido vazio sera recusado
+Observado: pedido vazio e recusado
+Correção/reteste ou pendência: nada
 
 T02 — Forma ausente não finaliza.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: deve manter pedido aberto
+Observado: foi recusado e manteve os itens
+Correção/reteste ou pendência: nada
 
 T03 — Cancelar, X e Escape preservam montagem e itens.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: deve fechar a previa e manter os itens
+Observado:as tres acoes usam a mesma funcao
+Correção/reteste ou pendência: nada
 
 T04 — Prévia alterada depois da abertura exige nova conferência.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão:deve pedir uma nova previa
+Observado: confirmacao com a previa antiga foi recusada
+Correção/reteste ou pendência: nda
 
 T05 — Confirmar gera retrato com subtotal, desconto e total coerentes.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: 47 menos 6,11 de desconto da 40 ,89 no pix
+Observado: ok
+Correção/reteste ou pendência: nada
 
 T06 — Pedido finalizado bloqueia mutações e segunda finalização.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão:deve bloquear mudancas e nova confrmacao
+Observado: todas as tentativas bloqueadas
+Correção/reteste ou pendência: nada
 
 T07 — Alterar o recibo retornado não altera o comprovante guardado.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão:editar o recibo preserva a copia guardada
+Observado: o codigo ainda nao guarda uma segunda copia
+Correção/reteste ou pendência: nada
 
 T08 — Novo pedido limpa a montagem; cancelamento de descarte preserva-a.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: confirmar limpa os campos 
+Observado:limpar os itens comeca um novo peido
+Correção/reteste ou pendência: nada
 
 T09 — Principal continua utilizável após fechar confirmação.
-Previsão:
-Observado:
-Correção/reteste ou pendência:
+Previsão: deve continuar funcionando
+Observado: ok
+Correção/reteste ou pendência: nada
 
 ## Explicação individual
 Uma decisão que consigo justificar:

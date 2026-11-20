@@ -1,8 +1,37 @@
 [
-    {"id": "PM1", "nome": "Mussarela Média", "preco_centavos": 3500},
-    {"id": "PG1", "nome": "Mussarela Grande", "preco_centavos": 4500},
-    {"id": "PM2", "nome": "Calabresa Média", "preco_centavos": 3800},
-    {"id": "PG2", "nome": "Calabresa Grande", "preco_centavos": 4800},
-    {"id": "B01", "nome": "Suco", "preco_centavos": 600},
-    {"id": "B02", "nome": "Refrigerante", "preco_centavos": 500}
+    {
+        "id": "PM1",
+        "nome": "Mussarela Média",
+        "preco_centavos": 3500
+    },
+    {
+        "id": "PG1",
+        "nome": "Mussarela Grande",
+        "preco_centavos": 4500
+    },
+    {
+        "id": "PM2",
+        "nome": "Calabresa Média",
+        "preco_centavos": 3800
+    },
+    {
+        "id": "PG2",
+        "nome": "Calabresa Grande",
+        "preco_centavos": 4800
+    },
+    {
+        "id": "B01",
+        "nome": "Suco",
+        "preco_centavos": 600
+    },
+    {
+        "id": "B02",
+        "nome": "Refrigerante",
+        "preco_centavos": 500
+    },
+    {
+        "id": "P02",
+        "nome": "picolé",
+        "preco_centavos": 500
+    }
 ]

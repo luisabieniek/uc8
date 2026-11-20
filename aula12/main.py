@@ -93,7 +93,6 @@ def abrir_previa(janela, pedido, forma, aviso, tree, lbl_total, combo_produto):
             aviso.configure(text=f"Recusado: {e}")
 
     def ao_cancelar_previa():
-        # X, Escape e Cancelar: apenas fecha, nao altera o pedido
         top.destroy()
         aviso.configure(text="Confirmacao cancelada. Pedido preservado.")
 
@@ -105,8 +104,6 @@ def abrir_previa(janela, pedido, forma, aviso, tree, lbl_total, combo_produto):
 
     top.protocol("WM_DELETE_WINDOW", ao_cancelar_previa)
     top.bind("<Escape>", lambda _: ao_cancelar_previa())
-
-    # foco inicial em Cancelar — evita confirmacao involuntaria pelo teclado
     btn_cancelar.focus_set()
     top.grab_set()
 
@@ -218,7 +215,6 @@ def criar_janela():
 
     pedido = Pedido()
 
-    # --- catalogo ---
     grupo_cat = ttk.LabelFrame(base, text="Catalogo", padding=6)
     grupo_cat.grid(row=0, column=0, sticky="ew", pady=4)
     grupo_cat.columnconfigure(0, weight=1)
@@ -229,7 +225,6 @@ def criar_janela():
     if rotulos:
         combo_produto.current(0)
 
-    # --- quantidade ---
     grupo_qtd = ttk.LabelFrame(base, text="Quantidade", padding=6)
     grupo_qtd.grid(row=1, column=0, sticky="ew", pady=4)
     grupo_qtd.columnconfigure(1, weight=1)
@@ -238,7 +233,6 @@ def criar_janela():
     entrada_qtd = ttk.Entry(grupo_qtd)
     entrada_qtd.grid(row=0, column=1, padx=6, pady=4, sticky="ew")
 
-    # --- botoes de montagem ---
     acoes = ttk.Frame(base)
     acoes.grid(row=2, column=0, sticky="ew", pady=4)
     for col in range(3):
@@ -297,7 +291,6 @@ def criar_janela():
 
     entrada_qtd.bind("<Return>", lambda _: ao_adicionar())
 
-    # --- treeview com scrollbar ---
     grupo_ped = ttk.LabelFrame(base, text="Pedido", padding=6)
     grupo_ped.grid(row=3, column=0, sticky="nsew", pady=4)
     grupo_ped.columnconfigure(0, weight=1)
@@ -326,11 +319,9 @@ def criar_janela():
     tree.bind("<Return>", lambda _: ao_atualizar())
     tree.bind("<Delete>", lambda _: ao_remover())
 
-    # --- total ---
     lbl_total = ttk.Label(base, text="Total: R$ 0,00", font=("", 10, "bold"))
     lbl_total.grid(row=4, column=0, sticky="e", padx=4, pady=2)
 
-    # --- forma de pagamento + confirmar/novo ---
     grupo_pag = ttk.LabelFrame(base, text="Pagamento", padding=6)
     grupo_pag.grid(row=5, column=0, sticky="ew", pady=4)
     grupo_pag.columnconfigure(1, weight=1)
@@ -351,7 +342,6 @@ def criar_janela():
 
     def ao_novo_pedido():
         if pedido.itens:
-            # guarda: pergunta antes de descartar montagem em andamento
             top = tk.Toplevel(janela)
             top.title("Descartar pedido?")
             top.resizable(False, False)
@@ -373,7 +363,6 @@ def criar_janela():
                 combo_produto.focus_set()
 
             def ao_manter():
-                # cancelar a pergunta preserva todos os itens
                 top.destroy()
                 aviso.configure(text="Descarte cancelado. Montagem preservada.")
                 combo_produto.focus_set()
@@ -385,7 +374,7 @@ def criar_janela():
 
             top.protocol("WM_DELETE_WINDOW", ao_manter)
             top.bind("<Escape>", lambda _: ao_manter())
-            btn_manter.focus_set()   # foco em Manter — evita descarte acidental
+            btn_manter.focus_set()   
             top.grab_set()
         else:
             pedido.novo()
@@ -398,7 +387,6 @@ def criar_janela():
     ttk.Button(acoes_pag, text="Novo pedido", command=ao_novo_pedido).grid(
         row=0, column=1, padx=(4, 0), sticky="ew")
 
-    # --- aviso ---
     aviso = ttk.Label(base, text=aviso_inicial,
                       wraplength=430)
     aviso.grid(row=6, column=0, pady=6, sticky="w")
