@@ -1,32 +1,8 @@
 [
-    {
-        "id": "P001",
-        "nome": "Pizza de Mussarela",
-        "preco_centavos": 4500
-    },
-    {
-        "id": "P002",
-        "nome": "Pizza de Calabresa",
-        "preco_centavos": 4800
-    },
-    {
-        "id": "P003",
-        "nome": "Pizza de Frango",
-        "preco_centavos": 5000
-    },
-    {
-        "id": "P004",
-        "nome": "Pizza Portuguesa",
-        "preco_centavos": 5200
-    },
-    {
-        "id": "B001",
-        "nome": "Refrigerante 2L",
-        "preco_centavos": 1200
-    },
-    {
-        "id": "B002",
-        "nome": "Água",
-        "preco_centavos": 500
-    }
+    {"id": "PM1", "nome": "Mussarela Média", "preco_centavos": 3500},
+    {"id": "PG1", "nome": "Mussarela Grande", "preco_centavos": 4500},
+    {"id": "PM2", "nome": "Calabresa Média", "preco_centavos": 3800},
+    {"id": "PG2", "nome": "Calabresa Grande", "preco_centavos": 4800},
+    {"id": "B01", "nome": "Suco", "preco_centavos": 600},
+    {"id": "B02", "nome": "Refrigerante", "preco_centavos": 500}
 ]

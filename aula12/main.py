@@ -1,16 +1,156 @@
-
-"""A12 — interface da pizzaria com catálogo JSON."""
-
+"""A12 — pizzaria com pedido, abas e catálogo JSON."""
 import json
 import tkinter as tk
-from pathlib import Path
-from tkinter import ttk, messagebox
+from tkinter import messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 from decimal import Decimal
-
+from pathlib import Path
 from arquivos import ler_catalogo, salvar_catalogo, validar_catalogo
 from modelos import Pedido, Produto, formatar
 from pagamento import calcular_pagamento, FATORES
+
+
+def _label_catalogo(produto):
+    return f"{produto.codigo} {produto.nome}  {formatar(produto.preco_centavos)}"
+
+
+def redesenhar(tree, lbl_total, pedido):
+    tree.delete(*tree.get_children())
+    for item in pedido.itens:
+        tree.insert(
+            "", tk.END,
+            iid=item.produto.codigo,
+            values=(
+                item.produto.codigo,
+                item.produto.nome,
+                item.quantidade,
+                formatar(item.subtotal()),
+            ),
+        )
+    total = pedido.total_centavos()
+    lbl_total.configure(text=f"Total: {formatar(total)}" if total else "Total: R$ 0,00")
+
+
+def codigo_selecionado(tree):
+    sel = tree.selection()
+    return sel[0] if sel else None
+
+
+def abrir_previa(janela, pedido, forma, aviso, tree, lbl_total, combo_produto):
+    """Abre Toplevel de confirmacao. Somente o botao Confirmar finaliza."""
+    if not pedido.itens:
+        aviso.configure(text="Pedido vazio. Adicione itens antes de confirmar.")
+        return
+
+    versao_previa = pedido.versao()
+
+    subtotal_texto = str(Decimal(pedido.total_centavos()) / 100)
+    try:
+        total_pag, desconto = calcular_pagamento(subtotal_texto, forma)
+    except ValueError as e:
+        aviso.configure(text=f"Recusado: {e}")
+        return
+
+    top = tk.Toplevel(janela)
+    top.title("Confirmar pedido")
+    top.resizable(False, False)
+    top.transient(janela)
+
+    frame = ttk.Frame(top, padding=14)
+    frame.grid(row=0, column=0, sticky="nsew")
+    frame.columnconfigure(0, weight=1)
+
+    ttk.Label(frame, text="Resumo do pedido", font=("", 10, "bold")).grid(
+        row=0, column=0, columnspan=2, pady=(0, 6), sticky="w")
+
+    for i, linha in enumerate(pedido.linhas()):
+        ttk.Label(frame, text=linha, wraplength=340).grid(
+            row=1 + i, column=0, columnspan=2, sticky="w")
+
+    sep_row = 1 + len(pedido.linhas())
+    ttk.Separator(frame, orient="horizontal").grid(
+        row=sep_row, column=0, columnspan=2, sticky="ew", pady=6)
+
+    ttk.Label(frame, text=f"Forma: {forma}").grid(
+        row=sep_row + 1, column=0, columnspan=2, sticky="w")
+    ttk.Label(frame, text=f"Total com desconto: {formatar(total_pag)}").grid(
+        row=sep_row + 2, column=0, columnspan=2, sticky="w")
+    ttk.Label(frame, text=f"Desconto: {formatar(desconto)}").grid(
+        row=sep_row + 3, column=0, columnspan=2, sticky="w", pady=(0, 8))
+
+    btn_row = sep_row + 4
+    frame.columnconfigure(0, weight=1)
+    frame.columnconfigure(1, weight=1)
+
+    def ao_confirmar():
+        try:
+            comprovante = pedido.finalizar(forma, versao_previa)
+            top.destroy()
+            mostrar_comprovante(janela, comprovante, aviso, tree, lbl_total,
+                                combo_produto)
+        except (ValueError, RuntimeError) as e:
+            top.destroy()
+            aviso.configure(text=f"Recusado: {e}")
+
+    def ao_cancelar_previa():
+        # X, Escape e Cancelar: apenas fecha, nao altera o pedido
+        top.destroy()
+        aviso.configure(text="Confirmacao cancelada. Pedido preservado.")
+
+    btn_confirmar = ttk.Button(frame, text="Confirmar", command=ao_confirmar)
+    btn_confirmar.grid(row=btn_row, column=0, padx=(0, 4), pady=6, sticky="ew")
+
+    btn_cancelar = ttk.Button(frame, text="Cancelar", command=ao_cancelar_previa)
+    btn_cancelar.grid(row=btn_row, column=1, padx=(4, 0), pady=6, sticky="ew")
+
+    top.protocol("WM_DELETE_WINDOW", ao_cancelar_previa)
+    top.bind("<Escape>", lambda _: ao_cancelar_previa())
+
+    # foco inicial em Cancelar — evita confirmacao involuntaria pelo teclado
+    btn_cancelar.focus_set()
+    top.grab_set()
+
+
+def mostrar_comprovante(janela, comprovante, aviso, tree, lbl_total, combo_produto):
+    """Exibe comprovante em Toplevel apos confirmacao."""
+    top = tk.Toplevel(janela)
+    top.title("Comprovante")
+    top.resizable(False, False)
+    top.transient(janela)
+
+    frame = ttk.Frame(top, padding=14)
+    frame.grid(row=0, column=0, sticky="nsew")
+    frame.columnconfigure(0, weight=1)
+
+    ttk.Label(frame, text="Pedido confirmado", font=("", 10, "bold")).grid(
+        row=0, column=0, pady=(0, 6), sticky="w")
+
+    for i, linha in enumerate(comprovante.linhas):
+        ttk.Label(frame, text=linha, wraplength=340).grid(
+            row=1 + i, column=0, sticky="w")
+
+    sep_row = 1 + len(comprovante.linhas)
+    ttk.Separator(frame, orient="horizontal").grid(
+        row=sep_row, column=0, sticky="ew", pady=6)
+    ttk.Label(frame, text=f"Forma: {comprovante.forma}").grid(
+        row=sep_row + 1, column=0, sticky="w")
+    ttk.Label(frame, text=f"Total com desconto: {formatar(comprovante.total_pago_centavos)}").grid(
+        row=sep_row + 2, column=0, sticky="w", pady=(0, 8))
+
+    aviso.configure(text="Pedido confirmado. Clique em Novo pedido para comecar.")
+
+    def ao_fechar():
+        top.destroy()
+        combo_produto.focus_set()
+
+    ttk.Label(frame, text=f"Desconto: {formatar(comprovante.desconto_centavos)}").grid(
+        row=sep_row + 3, column=0, sticky="w")
+    ttk.Button(frame, text="Fechar", command=ao_fechar).grid(
+        row=sep_row + 4, column=0, pady=4)
+
+    top.protocol("WM_DELETE_WINDOW", ao_fechar)
+    top.bind("<Escape>", lambda _: ao_fechar())
+    top.grab_set()
 
 
 def criar_janela():
@@ -18,808 +158,440 @@ def criar_janela():
     janela.title("Pizzaria — A12")
     janela.geometry("680x720")
     janela.minsize(540, 580)
+    janela.columnconfigure(0, weight=1)
+    janela.rowconfigure(0, weight=1)
 
-    caminho_padrao = Path(__file__).with_name("catalogo.json")
-    catalogo = []
-    pedido = Pedido()
-
-    # Abas
     notebook = ttk.Notebook(janela)
-    notebook.pack(fill="both", expand=True)
-
+    notebook.grid(row=0, column=0, sticky="nsew")
     aba_pedido = ttk.Frame(notebook, padding=12)
     aba_catalogo = ttk.Frame(notebook, padding=12)
-
     notebook.add(aba_pedido, text="Pedido")
     notebook.add(aba_catalogo, text="Catálogo JSON")
 
-    # Menu de navegação
     menu = tk.Menu(janela)
     menu_navegacao = tk.Menu(menu, tearoff=False)
-
     menu_navegacao.add_command(
-        label="Pedido",
-        command=lambda: notebook.select(aba_pedido)
+        label="Pedido\tCtrl+1",
+        command=lambda: notebook.select(aba_pedido),
     )
-
     menu_navegacao.add_command(
-        label="Catálogo JSON",
-        command=lambda: notebook.select(aba_catalogo)
+        label="Catálogo JSON\tCtrl+2",
+        command=lambda: notebook.select(aba_catalogo),
     )
-
     menu.add_cascade(label="Navegar", menu=menu_navegacao)
     janela.configure(menu=menu)
-
     janela.bind_all(
         "<Control-Key-1>",
-        lambda evento: notebook.select(aba_pedido)
+        lambda _: (notebook.select(aba_pedido), "break")[1],
     )
     janela.bind_all(
         "<Control-Key-2>",
-        lambda evento: notebook.select(aba_catalogo)
+        lambda _: (notebook.select(aba_catalogo), "break")[1],
     )
 
-    # Catálogo inicial
+    catalogo = []
+    caminho_padrao = Path(__file__).with_name("catalogo.json")
     aviso_inicial = "Selecione um produto e informe a quantidade."
+    dados_iniciais = None
     texto_inicial = None
-
     try:
-        dados = ler_catalogo(caminho_padrao)
-
-        if dados is None:
-            aviso_inicial = "Catálogo ausente. Carregue um JSON."
-
+        dados_iniciais = ler_catalogo(caminho_padrao)
+        if dados_iniciais is None:
+            aviso_inicial = "Catálogo ausente. Crie ou carregue um JSON na aba Catálogo."
         else:
             catalogo = [
-                Produto(
-                    item["id"],
-                    item["nome"],
-                    item["preco_centavos"]
-                )
-                for item in dados
+                Produto(item["id"], item["nome"], item["preco_centavos"])
+                for item in dados_iniciais
             ]
-
     except (ValueError, OSError) as erro:
-        aviso_inicial = f"Catálogo inválido: {erro}"
-
+        aviso_inicial = f"Catálogo inválido; corrija-o na aba Catálogo: {erro}"
         try:
-            texto_inicial = caminho_padrao.read_text(
-                encoding="utf-8"
-            )
+            texto_inicial = caminho_padrao.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             pass
 
-    # Estrutura da aba Pedido
+    base = ttk.Frame(aba_pedido)
+    base.grid(row=0, column=0, sticky="nsew")
+    base.columnconfigure(0, weight=1)
     aba_pedido.columnconfigure(0, weight=1)
-    aba_pedido.rowconfigure(3, weight=1)
+    aba_pedido.rowconfigure(0, weight=1)
 
-    # Catálogo
-    grupo_catalogo = ttk.LabelFrame(
-        aba_pedido,
-        text="Catálogo",
-        padding=6
+    pedido = Pedido()
+
+    # --- catalogo ---
+    grupo_cat = ttk.LabelFrame(base, text="Catalogo", padding=6)
+    grupo_cat.grid(row=0, column=0, sticky="ew", pady=4)
+    grupo_cat.columnconfigure(0, weight=1)
+
+    rotulos = [_label_catalogo(p) for p in catalogo]
+    combo_produto = ttk.Combobox(grupo_cat, values=rotulos, state="readonly")
+    combo_produto.grid(row=0, column=0, sticky="ew", padx=4, pady=4)
+    if rotulos:
+        combo_produto.current(0)
+
+    # --- quantidade ---
+    grupo_qtd = ttk.LabelFrame(base, text="Quantidade", padding=6)
+    grupo_qtd.grid(row=1, column=0, sticky="ew", pady=4)
+    grupo_qtd.columnconfigure(1, weight=1)
+
+    ttk.Label(grupo_qtd, text="Qtd:").grid(row=0, column=0, padx=6, pady=4, sticky="w")
+    entrada_qtd = ttk.Entry(grupo_qtd)
+    entrada_qtd.grid(row=0, column=1, padx=6, pady=4, sticky="ew")
+
+    # --- botoes de montagem ---
+    acoes = ttk.Frame(base)
+    acoes.grid(row=2, column=0, sticky="ew", pady=4)
+    for col in range(3):
+        acoes.columnconfigure(col, weight=1)
+
+    def ao_adicionar():
+        indice = combo_produto.current()
+        if not 0 <= indice < len(catalogo):
+            aviso.configure(text="Carregue ou cadastre produtos na aba Catálogo JSON.")
+            notebook.select(aba_catalogo)
+            catalogo_editor.focus_set()
+            return
+        produto = catalogo[indice]
+        try:
+            pedido.adicionar(produto, entrada_qtd.get())
+            redesenhar(tree, lbl_total, pedido)
+            aviso.config(text=f"Adicionado: {produto.nome} x{entrada_qtd.get()}")
+            entrada_qtd.delete(0, tk.END)
+        except (ValueError, RuntimeError) as e:
+            aviso.configure(text=f"Recusado: {e}")
+        entrada_qtd.focus_set()
+
+    def ao_atualizar():
+        codigo = codigo_selecionado(tree)
+        if not codigo:
+            aviso.configure(text="Selecione um item na tabela para atualizar.")
+            return
+        try:
+            pedido.atualizar(codigo, entrada_qtd.get())
+            aviso.configure(text=f"Atualizado: {codigo} -> x{entrada_qtd.get()}")
+            redesenhar(tree, lbl_total, pedido)
+            entrada_qtd.delete(0, tk.END)
+        except (ValueError, RuntimeError) as e:
+            aviso.configure(text=f"Recusado: {e}")
+        entrada_qtd.focus_set()
+
+    def ao_remover():
+        codigo = codigo_selecionado(tree)
+        if not codigo:
+            aviso.configure(text="Selecione um item na tabela para remover.")
+            return
+        try:
+            pedido.remover(codigo)
+            aviso.configure(text=f"Removido: {codigo}")
+            redesenhar(tree, lbl_total, pedido)
+        except (ValueError, RuntimeError) as e:
+            aviso.configure(text=f"Recusado: {e}")
+
+    btn_adicionar = ttk.Button(acoes, text="Adicionar", command=ao_adicionar)
+    btn_adicionar.grid(
+        row=0, column=0, padx=4, pady=6, sticky="ew")
+    ttk.Button(acoes, text="Atualizar", command=ao_atualizar).grid(
+        row=0, column=1, padx=4, pady=6, sticky="ew")
+    ttk.Button(acoes, text="Remover",   command=ao_remover).grid(
+        row=0, column=2, padx=4, pady=6, sticky="ew")
+
+    entrada_qtd.bind("<Return>", lambda _: ao_adicionar())
+
+    # --- treeview com scrollbar ---
+    grupo_ped = ttk.LabelFrame(base, text="Pedido", padding=6)
+    grupo_ped.grid(row=3, column=0, sticky="nsew", pady=4)
+    grupo_ped.columnconfigure(0, weight=1)
+    grupo_ped.rowconfigure(0, weight=1)
+    base.rowconfigure(3, weight=1)
+
+    colunas = ("codigo", "nome", "qtd", "subtotal")
+    tree = ttk.Treeview(
+        grupo_ped, columns=colunas, show="headings",
+        height=6, selectmode="browse",
     )
-    grupo_catalogo.grid(
-        row=0, column=0, sticky="ew", pady=4
+    tree.heading("codigo",   text="Codigo")
+    tree.heading("nome",     text="Nome")
+    tree.heading("qtd",      text="Qtd")
+    tree.heading("subtotal", text="Subtotal")
+    tree.column("codigo",   width=55,  anchor="center")
+    tree.column("nome",     width=110, anchor="w")
+    tree.column("qtd",      width=45,  anchor="center")
+    tree.column("subtotal", width=95,  anchor="e")
+    tree.grid(row=0, column=0, sticky="nsew")
+
+    scroll = ttk.Scrollbar(grupo_ped, orient="vertical", command=tree.yview)
+    scroll.grid(row=0, column=1, sticky="ns")
+    tree.configure(yscrollcommand=scroll.set)
+
+    tree.bind("<Return>", lambda _: ao_atualizar())
+    tree.bind("<Delete>", lambda _: ao_remover())
+
+    # --- total ---
+    lbl_total = ttk.Label(base, text="Total: R$ 0,00", font=("", 10, "bold"))
+    lbl_total.grid(row=4, column=0, sticky="e", padx=4, pady=2)
+
+    # --- forma de pagamento + confirmar/novo ---
+    grupo_pag = ttk.LabelFrame(base, text="Pagamento", padding=6)
+    grupo_pag.grid(row=5, column=0, sticky="ew", pady=4)
+    grupo_pag.columnconfigure(1, weight=1)
+
+    ttk.Label(grupo_pag, text="Forma:").grid(row=0, column=0, padx=6, pady=4, sticky="w")
+    combo_forma = ttk.Combobox(grupo_pag, values=list(FATORES.keys()), state="readonly")
+    combo_forma.grid(row=0, column=1, padx=6, pady=4, sticky="ew")
+    combo_forma.current(0)
+
+    acoes_pag = ttk.Frame(grupo_pag)
+    acoes_pag.grid(row=1, column=0, columnspan=2, sticky="ew", pady=4)
+    acoes_pag.columnconfigure(0, weight=1)
+    acoes_pag.columnconfigure(1, weight=1)
+
+    def ao_confirmar_pedido():
+        abrir_previa(janela, pedido, combo_forma.get(), aviso,
+                     tree, lbl_total, combo_produto)
+
+    def ao_novo_pedido():
+        if pedido.itens:
+            # guarda: pergunta antes de descartar montagem em andamento
+            top = tk.Toplevel(janela)
+            top.title("Descartar pedido?")
+            top.resizable(False, False)
+            top.transient(janela)
+
+            frame = ttk.Frame(top, padding=14)
+            frame.grid(row=0, column=0, sticky="nsew")
+            frame.columnconfigure(0, weight=1)
+            frame.columnconfigure(1, weight=1)
+
+            ttk.Label(frame, text="Descartar a montagem atual e comecar um novo pedido?",
+                      wraplength=300).grid(row=0, column=0, columnspan=2, pady=(0, 10))
+
+            def ao_descartar():
+                pedido.novo()
+                redesenhar(tree, lbl_total, pedido)
+                aviso.configure(text="Novo pedido iniciado.")
+                top.destroy()
+                combo_produto.focus_set()
+
+            def ao_manter():
+                # cancelar a pergunta preserva todos os itens
+                top.destroy()
+                aviso.configure(text="Descarte cancelado. Montagem preservada.")
+                combo_produto.focus_set()
+
+            ttk.Button(frame, text="Descartar", command=ao_descartar).grid(
+                row=1, column=0, padx=(0, 4), sticky="ew")
+            btn_manter = ttk.Button(frame, text="Manter", command=ao_manter)
+            btn_manter.grid(row=1, column=1, padx=(4, 0), sticky="ew")
+
+            top.protocol("WM_DELETE_WINDOW", ao_manter)
+            top.bind("<Escape>", lambda _: ao_manter())
+            btn_manter.focus_set()   # foco em Manter — evita descarte acidental
+            top.grab_set()
+        else:
+            pedido.novo()
+            redesenhar(tree, lbl_total, pedido)
+            aviso.configure(text="Novo pedido iniciado.")
+            combo_produto.focus_set()
+
+    ttk.Button(acoes_pag, text="Confirmar pedido", command=ao_confirmar_pedido).grid(
+        row=0, column=0, padx=(0, 4), sticky="ew")
+    ttk.Button(acoes_pag, text="Novo pedido", command=ao_novo_pedido).grid(
+        row=0, column=1, padx=(4, 0), sticky="ew")
+
+    # --- aviso ---
+    aviso = ttk.Label(base, text=aviso_inicial,
+                      wraplength=430)
+    aviso.grid(row=6, column=0, pady=6, sticky="w")
+
+    aba_catalogo.columnconfigure(0, weight=1)
+    aba_catalogo.rowconfigure(2, weight=1)
+    ttk.Label(aba_catalogo, text="Arquivo do catálogo (JSON):").grid(
+        row=0, column=0, sticky="w", pady=(0, 3))
+
+    caminho_catalogo = tk.StringVar(value=str(caminho_padrao))
+    linha_caminho = ttk.Frame(aba_catalogo)
+    linha_caminho.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+    linha_caminho.columnconfigure(0, weight=1)
+    entrada_caminho = ttk.Entry(linha_caminho, textvariable=caminho_catalogo)
+    entrada_caminho.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+
+    acoes_catalogo = ttk.Frame(linha_caminho)
+    acoes_catalogo.grid(row=0, column=1, sticky="e")
+    btn_carregar = ttk.Button(acoes_catalogo, text="Carregar")
+    btn_carregar.grid(row=0, column=0, padx=(0, 4))
+    btn_salvar = ttk.Button(acoes_catalogo, text="Salvar")
+    btn_salvar.grid(row=0, column=1)
+
+    editor_frame = ttk.Frame(aba_catalogo)
+    editor_frame.grid(row=2, column=0, sticky="nsew")
+    editor_frame.columnconfigure(0, weight=1)
+    editor_frame.rowconfigure(0, weight=1)
+    catalogo_editor = ScrolledText(
+        editor_frame,
+        height=18,
+        width=70,
+        wrap="none",
+        undo=True,
+        takefocus=True,
     )
-    grupo_catalogo.columnconfigure(0, weight=1)
-
-    opcoes_produtos = []
-
-    combo_produto = ttk.Combobox(
-        grupo_catalogo,
-        values=opcoes_produtos,
-        state="readonly"
+    catalogo_editor.grid(row=0, column=0, sticky="nsew")
+    catalogo_aviso = ttk.Label(
+        aba_catalogo,
+        text=(
+            aviso_inicial
+            if "Catálogo" in aviso_inicial
+            else "Edite uma lista JSON com id, nome e preco_centavos."
+        ),
+        wraplength=620,
     )
-    combo_produto.grid(
-        row=0, column=0, sticky="ew", padx=4, pady=4
-    )
+    catalogo_aviso.grid(row=3, column=0, sticky="w", pady=(8, 0))
 
-    def atualizar_opcoes_catalogo():
-        opcoes = []
+    def definir_editor(dados):
+        catalogo_editor.delete("1.0", tk.END)
+        catalogo_editor.insert(
+            "1.0",
+            json.dumps(dados, ensure_ascii=False, indent=4),
+        )
+        catalogo_editor.edit_modified(False)
 
-        for produto in catalogo:
-            opcoes.append(
-                f"{produto.codigo} {produto.nome} "
-                f"{formatar(produto.preco_centavos)}"
-            )
-
-        combo_produto.configure(values=opcoes)
-
-        if opcoes:
+    def atualizar_catalogo(dados):
+        nonlocal catalogo
+        codigo_atual = (
+            catalogo[combo_produto.current()].codigo
+            if 0 <= combo_produto.current() < len(catalogo)
+            else None
+        )
+        catalogo = [
+            Produto(item["id"], item["nome"], item["preco_centavos"])
+            for item in dados
+        ]
+        rotulos = [_label_catalogo(produto) for produto in catalogo]
+        combo_produto.configure(values=rotulos)
+        codigos = [produto.codigo for produto in catalogo]
+        if codigo_atual in codigos:
+            combo_produto.current(codigos.index(codigo_atual))
+        elif catalogo:
             combo_produto.current(0)
         else:
             combo_produto.set("")
 
-    atualizar_opcoes_catalogo()
-
-    # Quantidade
-    grupo_quantidade = ttk.LabelFrame(
-        aba_pedido,
-        text="Quantidade",
-        padding=6
-    )
-    grupo_quantidade.grid(
-        row=1, column=0, sticky="ew", pady=4
-    )
-    grupo_quantidade.columnconfigure(1, weight=1)
-
-    ttk.Label(
-        grupo_quantidade,
-        text="Qtd:"
-    ).grid(row=0, column=0, padx=6, pady=4)
-
-    entrada_quantidade = ttk.Entry(grupo_quantidade)
-    entrada_quantidade.grid(
-        row=0, column=1, padx=6, pady=4, sticky="ew"
-    )
-
-    # Tabela do pedido
-    grupo_pedido = ttk.LabelFrame(
-        aba_pedido,
-        text="Pedido",
-        padding=6
-    )
-    grupo_pedido.grid(
-        row=3, column=0, sticky="nsew", pady=4
-    )
-    grupo_pedido.columnconfigure(0, weight=1)
-    grupo_pedido.rowconfigure(0, weight=1)
-
-    colunas = ("codigo", "nome", "quantidade", "subtotal")
-
-    tree = ttk.Treeview(
-        grupo_pedido,
-        columns=colunas,
-        show="headings",
-        height=6,
-        selectmode="browse"
-    )
-
-    tree.heading("codigo", text="Código")
-    tree.heading("nome", text="Nome")
-    tree.heading("quantidade", text="Qtd")
-    tree.heading("subtotal", text="Subtotal")
-
-    tree.column("codigo", width=65, anchor="center")
-    tree.column("nome", width=150)
-    tree.column("quantidade", width=50, anchor="center")
-    tree.column("subtotal", width=100, anchor="e")
-
-    tree.grid(row=0, column=0, sticky="nsew")
-
-    barra = ttk.Scrollbar(
-        grupo_pedido,
-        orient="vertical",
-        command=tree.yview
-    )
-    barra.grid(row=0, column=1, sticky="ns")
-    tree.configure(yscrollcommand=barra.set)
-
-    # Total e aviso
-    lbl_total = ttk.Label(
-        aba_pedido,
-        text="Total: R$ 0,00",
-        font=("", 10, "bold")
-    )
-    lbl_total.grid(row=4, column=0, sticky="e", pady=4)
-
-    aviso = ttk.Label(
-        aba_pedido,
-        text=aviso_inicial,
-        wraplength=500
-    )
-    aviso.grid(row=6, column=0, sticky="w", pady=6)
-
-    # Atualizar tabela
-    def redesenhar():
-        tree.delete(*tree.get_children())
-
-        for item in pedido.itens:
-            tree.insert(
-                "",
-                tk.END,
-                iid=item.produto.codigo,
-                values=(
-                    item.produto.codigo,
-                    item.produto.nome,
-                    item.quantidade,
-                    formatar(item.subtotal())
-                )
-            )
-
-        total = pedido.total_centavos()
-        lbl_total.configure(text=f"Total: {formatar(total)}")
-
-    def codigo_selecionado():
-        selecao = tree.selection()
-        return selecao[0] if selecao else None
-
-    # Adicionar
-    def ao_adicionar():
-        indice = combo_produto.current()
-
-        if not 0 <= indice < len(catalogo):
-            aviso.configure(
-                text="Selecione um produto do catálogo."
-            )
-            return
-
-        produto = catalogo[indice]
-
-        try:
-            pedido.adicionar(
-                produto,
-                entrada_quantidade.get()
-            )
-
-            redesenhar()
-            aviso.configure(text=f"Produto adicionado: {produto.nome}")
-            entrada_quantidade.delete(0, tk.END)
-
-        except (ValueError, RuntimeError) as erro:
-            aviso.configure(text=f"Recusado: {erro}")
-
-        entrada_quantidade.focus_set()
-
-    # Atualizar
-    def ao_atualizar():
-        codigo = codigo_selecionado()
-
-        if codigo is None:
-            aviso.configure(
-                text="Selecione um item do pedido."
-            )
-            return
-
-        try:
-            pedido.atualizar(
-                codigo,
-                entrada_quantidade.get()
-            )
-
-            redesenhar()
-            aviso.configure(text="Quantidade atualizada.")
-            entrada_quantidade.delete(0, tk.END)
-
-        except (ValueError, RuntimeError) as erro:
-            aviso.configure(text=f"Recusado: {erro}")
-
-        entrada_quantidade.focus_set()
-
-    # Remover
-    def ao_remover():
-        codigo = codigo_selecionado()
-
-        if codigo is None:
-            aviso.configure(
-                text="Selecione um item para remover."
-            )
-            return
-
-        try:
-            pedido.remover(codigo)
-            redesenhar()
-            aviso.configure(text="Produto removido.")
-
-        except (ValueError, RuntimeError) as erro:
-            aviso.configure(text=f"Recusado: {erro}")
-
-    # Botões de montagem
-    acoes = ttk.Frame(aba_pedido)
-    acoes.grid(row=2, column=0, sticky="ew", pady=4)
-
-    for coluna in range(3):
-        acoes.columnconfigure(coluna, weight=1)
-
-    ttk.Button(
-        acoes,
-        text="Adicionar",
-        command=ao_adicionar
-    ).grid(row=0, column=0, padx=4, sticky="ew")
-
-    ttk.Button(
-        acoes,
-        text="Atualizar",
-        command=ao_atualizar
-    ).grid(row=0, column=1, padx=4, sticky="ew")
-
-    ttk.Button(
-        acoes,
-        text="Remover",
-        command=ao_remover
-    ).grid(row=0, column=2, padx=4, sticky="ew")
-
-    entrada_quantidade.bind(
-        "<Return>",
-        lambda evento: ao_adicionar()
-    )
-
-    tree.bind(
-        "<Return>",
-        lambda evento: ao_atualizar()
-    )
-
-    tree.bind(
-        "<Delete>",
-        lambda evento: ao_remover()
-    )
-
-    # Forma de pagamento
-    grupo_pagamento = ttk.LabelFrame(
-        aba_pedido,
-        text="Pagamento",
-        padding=6
-    )
-    grupo_pagamento.grid(
-        row=5, column=0, sticky="ew", pady=4
-    )
-    grupo_pagamento.columnconfigure(1, weight=1)
-
-    ttk.Label(
-        grupo_pagamento,
-        text="Forma:"
-    ).grid(row=0, column=0, padx=6, pady=4)
-
-    combo_forma = ttk.Combobox(
-        grupo_pagamento,
-        values=list(FATORES.keys()),
-        state="readonly"
-    )
-    combo_forma.grid(
-        row=0, column=1, padx=6, pady=4, sticky="ew"
-    )
-    combo_forma.current(0)
-
-    # Comprovante
-    def mostrar_comprovante(comprovante):
-        top = tk.Toplevel(janela)
-        top.title("Comprovante")
-        top.resizable(False, False)
-
-        frame = ttk.Frame(top, padding=14)
-        frame.pack(fill="both", expand=True)
-
-        ttk.Label(
-            frame,
-            text="Pedido confirmado",
-            font=("", 10, "bold")
-        ).pack(anchor="w", pady=5)
-
-        for linha in comprovante.linhas:
-            ttk.Label(
-                frame,
-                text=linha,
-                wraplength=340
-            ).pack(anchor="w")
-
-        ttk.Separator(frame).pack(
-            fill="x", pady=8
-        )
-
-        ttk.Label(
-            frame,
-            text=f"Forma: {comprovante.forma}"
-        ).pack(anchor="w")
-
-        ttk.Label(
-            frame,
-            text=(
-                "Total com desconto: "
-                f"{formatar(comprovante.total_centavos)}"
-            )
-        ).pack(anchor="w")
-
-        aviso.configure(
-            text="Pedido confirmado. Inicie um novo pedido."
-        )
-
-        def fechar():
-            top.destroy()
-            combo_produto.focus_set()
-
-        ttk.Button(
-            frame,
-            text="Fechar",
-            command=fechar
-        ).pack(pady=8)
-
-        top.protocol("WM_DELETE_WINDOW", fechar)
-        top.bind("<Escape>", lambda evento: fechar())
-        top.grab_set()
-
-    # Prévia
-    def abrir_previa():
-        if not pedido.itens:
-            aviso.configure(
-                text="Pedido vazio. Adicione itens antes de confirmar."
-            )
-            return
-
-        forma = combo_forma.get()
-        versao_previa = pedido.versao()
-
-        subtotal = str(Decimal(pedido.total_centavos()) / 100)
-
-        try:
-            total, desconto = calcular_pagamento(
-                subtotal,
-                forma
-            )
-        except ValueError as erro:
-            aviso.configure(text=f"Recusado: {erro}")
-            return
-
-        top = tk.Toplevel(janela)
-        top.title("Confirmar pedido")
-        top.resizable(False, False)
-        top.transient(janela)
-
-        frame = ttk.Frame(top, padding=14)
-        frame.pack(fill="both", expand=True)
-
-        ttk.Label(
-            frame,
-            text="Resumo do pedido",
-            font=("", 10, "bold")
-        ).pack(anchor="w", pady=5)
-
-        for linha in pedido.linhas():
-            ttk.Label(
-                frame,
-                text=linha,
-                wraplength=340
-            ).pack(anchor="w")
-
-        ttk.Separator(frame).pack(fill="x", pady=8)
-
-        ttk.Label(frame, text=f"Forma: {forma}").pack(anchor="w")
-        ttk.Label(
-            frame,
-            text=f"Total com desconto: {formatar(total)}"
-        ).pack(anchor="w")
-        ttk.Label(
-            frame,
-            text=f"Desconto: {formatar(desconto)}"
-        ).pack(anchor="w")
-
-        def confirmar():
-            try:
-                comprovante = pedido.finalizar(
-                    forma,
-                    versao_previa
-                )
-
-                top.destroy()
-                mostrar_comprovante(comprovante)
-
-            except (ValueError, RuntimeError) as erro:
-                top.destroy()
-                aviso.configure(text=f"Recusado: {erro}")
-
-        def cancelar():
-            top.destroy()
-            aviso.configure(
-                text="Confirmação cancelada. Pedido preservado."
-            )
-
-        botoes = ttk.Frame(frame)
-        botoes.pack(fill="x", pady=10)
-
-        ttk.Button(
-            botoes,
-            text="Confirmar",
-            command=confirmar
-        ).pack(side="left", expand=True, fill="x", padx=3)
-
-        botao_cancelar = ttk.Button(
-            botoes,
-            text="Cancelar",
-            command=cancelar
-        )
-        botao_cancelar.pack(
-            side="left", expand=True, fill="x", padx=3
-        )
-
-        top.protocol("WM_DELETE_WINDOW", cancelar)
-        top.bind("<Escape>", lambda evento: cancelar())
-
-        botao_cancelar.focus_set()
-        top.grab_set()
-
-    # Novo pedido
-    def ao_novo_pedido():
-        if pedido.itens:
-            resposta = messagebox.askyesno(
-                "Novo pedido",
-                "Deseja descartar a montagem atual?"
-            )
-
-            if not resposta:
-                aviso.configure(
-                    text="Pedido atual preservado."
-                )
-                return
-
-        pedido.novo()
-        redesenhar()
-        aviso.configure(text="Novo pedido iniciado.")
-
-    # Botões de pagamento
-    botoes_pagamento = ttk.Frame(grupo_pagamento)
-    botoes_pagamento.grid(
-        row=1, column=0, columnspan=2, sticky="ew", pady=5
-    )
-
-    botoes_pagamento.columnconfigure(0, weight=1)
-    botoes_pagamento.columnconfigure(1, weight=1)
-
-    ttk.Button(
-        botoes_pagamento,
-        text="Confirmar pedido",
-        command=abrir_previa
-    ).grid(row=0, column=0, padx=3, sticky="ew")
-
-    ttk.Button(
-        botoes_pagamento,
-        text="Novo pedido",
-        command=ao_novo_pedido
-    ).grid(row=0, column=1, padx=3, sticky="ew")
-
-    # Aba Catálogo JSON
-    aba_catalogo.columnconfigure(0, weight=1)
-    aba_catalogo.rowconfigure(2, weight=1)
-
-    ttk.Label(
-        aba_catalogo,
-        text="Arquivo do catálogo (JSON):"
-    ).grid(row=0, column=0, sticky="w")
-
-    caminho_json = tk.StringVar(value=str(caminho_padrao))
-
-    linha_caminho = ttk.Frame(aba_catalogo)
-    linha_caminho.grid(
-        row=1, column=0, sticky="ew", pady=6
-    )
-    linha_caminho.columnconfigure(0, weight=1)
-
-    entrada_caminho = ttk.Entry(
-        linha_caminho,
-        textvariable=caminho_json
-    )
-    entrada_caminho.grid(
-        row=0, column=0, sticky="ew", padx=4
-    )
-
-    botoes_json = ttk.Frame(linha_caminho)
-    botoes_json.grid(row=0, column=1)
-
-    editor = ScrolledText(
-        aba_catalogo,
-        height=18,
-        width=70,
-        wrap="none",
-        undo=True
-    )
-    editor.grid(
-        row=2, column=0, sticky="nsew"
-    )
-
-    aviso_catalogo = ttk.Label(
-        aba_catalogo,
-        text="Edite uma lista JSON com id, nome e preco_centavos.",
-        wraplength=600
-    )
-    aviso_catalogo.grid(
-        row=3, column=0, sticky="w", pady=8
-    )
-
-    def definir_editor(dados):
-        editor.delete("1.0", tk.END)
-
-        editor.insert(
-            "1.0",
-            json.dumps(
-                dados,
-                ensure_ascii=False,
-                indent=4
-            )
-        )
-
-        editor.edit_modified(False)
-
-    def atualizar_catalogo(dados):
-        nonlocal catalogo
-
-        codigo_atual = None
-        indice = combo_produto.current()
-
-        if 0 <= indice < len(catalogo):
-            codigo_atual = catalogo[indice].codigo
-
-        catalogo = [
-            Produto(
-                item["id"],
-                item["nome"],
-                item["preco_centavos"]
-            )
-            for item in dados
-        ]
-
-        atualizar_opcoes_catalogo()
-
-        codigos = [
-            produto.codigo for produto in catalogo
-        ]
-
-        if codigo_atual in codigos:
-            combo_produto.current(codigos.index(codigo_atual))
-
-    def obter_caminho():
-        texto = caminho_json.get().strip()
-
+    def obter_caminho_catalogo():
+        texto = caminho_catalogo.get().strip()
         if not texto:
-            aviso_catalogo.configure(
-                text="Informe o caminho do arquivo."
-            )
+            catalogo_aviso.configure(text="Informe o caminho do arquivo JSON.")
+            entrada_caminho.focus_set()
             return None
-
         caminho = Path(texto)
-
         if not caminho.is_absolute():
             caminho = Path(__file__).parent / caminho
-
         return caminho
 
-    # Carregar catálogo
     def ao_carregar_catalogo():
-        caminho = obter_caminho()
-
+        caminho = obter_caminho_catalogo()
         if caminho is None:
             return
-
-        if editor.edit_modified():
-            resposta = messagebox.askyesno(
+        if catalogo_editor.edit_modified():
+            pode_descartar = messagebox.askyesno(
                 "Descartar edição?",
-                "Deseja descartar as alterações do editor?"
+                "A edição JSON foi alterada. Descartar as alterações e carregar o arquivo?",
+                parent=janela,
             )
-
-            if not resposta:
-                aviso_catalogo.configure(
-                    text="Carregamento cancelado. Edição preservada."
+            if not pode_descartar:
+                catalogo_aviso.configure(
+                    text="Carregamento cancelado. A edição atual foi preservada."
                 )
+                catalogo_editor.focus_set()
                 return
-
         try:
             dados = ler_catalogo(caminho)
-
-        except (ValueError, OSError) as erro:
+        except (OSError, ValueError) as erro:
             try:
-                texto = caminho.read_text(encoding="utf-8")
-                editor.delete("1.0", tk.END)
-                editor.insert("1.0", texto)
-                editor.edit_modified(False)
+                texto_original = caminho.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
-                pass
-
-            aviso_catalogo.configure(
-                text=f"Catálogo inválido ou inacessível: {erro}"
+                texto_original = None
+            if texto_original is not None:
+                catalogo_editor.delete("1.0", tk.END)
+                catalogo_editor.insert("1.0", texto_original)
+                catalogo_editor.edit_modified(False)
+            catalogo_aviso.configure(
+                text=f"Catálogo inválido ou inacessível; arquivo preservado: {erro}"
             )
+            catalogo_editor.focus_set()
             return
 
         if dados is None:
             dados = []
-            mensagem = "Arquivo ausente. Catálogo vazio carregado."
+            mensagem = "Arquivo ausente. Catálogo vazio carregado; o pedido foi preservado."
         else:
-            mensagem = (
-                f"Catálogo carregado: {len(dados)} produto(s)."
-            )
-
+            mensagem = f"Catálogo carregado: {len(dados)} produto(s). Pedido preservado."
         definir_editor(dados)
         atualizar_catalogo(dados)
+        catalogo_aviso.configure(text=mensagem)
+        combo_produto.focus_set()
 
-        aviso_catalogo.configure(
-            text=mensagem + " Pedido preservado."
-        )
-
-    # Salvar catálogo
     def ao_salvar_catalogo():
-        caminho = obter_caminho()
-
+        caminho = obter_caminho_catalogo()
         if caminho is None:
             return
-
         try:
-            dados = json.loads(
-                editor.get("1.0", "end-1c")
-            )
-
+            dados = json.loads(catalogo_editor.get("1.0", "end-1c"))
             validar_catalogo(dados)
-
         except (json.JSONDecodeError, ValueError) as erro:
-            aviso_catalogo.configure(
-                text=f"Catálogo inválido. Arquivo não alterado: {erro}"
+            catalogo_aviso.configure(
+                text=f"JSON ou catálogo inválido; corrija a edição. Arquivo não alterado: {erro}"
             )
+            catalogo_editor.focus_set()
             return
 
         acao = "Substituir" if caminho.exists() else "Criar"
-
-        resposta = messagebox.askyesno(
+        pode_salvar = messagebox.askyesno(
             "Confirmar salvamento",
-            f"{acao} o catálogo neste caminho?\n{caminho}"
+            f"{acao} o catálogo neste caminho?\n{caminho}",
+            parent=janela,
         )
-
-        if not resposta:
-            aviso_catalogo.configure(
-                text="Salvamento cancelado. Dados preservados."
+        if not pode_salvar:
+            catalogo_aviso.configure(
+                text="Salvamento cancelado. Edição e arquivo foram preservados."
             )
+            catalogo_editor.focus_set()
             return
-
         try:
             salvar_catalogo(caminho, dados)
-
         except (OSError, ValueError) as erro:
-            aviso_catalogo.configure(
-                text=f"Erro ao salvar: {erro}"
+            catalogo_aviso.configure(
+                text=f"Não foi possível salvar; edição e arquivo preservados: {erro}"
             )
+            catalogo_editor.focus_set()
             return
 
         definir_editor(dados)
         atualizar_catalogo(dados)
-
-        aviso_catalogo.configure(
+        catalogo_aviso.configure(
             text=f"Catálogo salvo: {len(dados)} produto(s). Pedido preservado."
         )
+        combo_produto.focus_set()
 
-    ttk.Button(
-        botoes_json,
-        text="Carregar",
-        command=ao_carregar_catalogo
-    ).pack(side="left", padx=3)
-
-    ttk.Button(
-        botoes_json,
-        text="Salvar",
-        command=ao_salvar_catalogo
-    ).pack(side="left", padx=3)
-
-    # Teclas de navegação no editor
-    editor.bind(
+    btn_carregar.configure(command=ao_carregar_catalogo)
+    btn_salvar.configure(command=ao_salvar_catalogo)
+    catalogo_editor.bind(
         "<Tab>",
-        lambda evento: (
-            evento.widget.tk_focusNext().focus_set(),
-            "break"
-        )[1]
+        lambda evento: (evento.widget.tk_focusNext().focus_set(), "break")[1],
     )
-
-    editor.bind(
+    catalogo_editor.bind(
         "<Shift-Tab>",
-        lambda evento: (
-            evento.widget.tk_focusPrev().focus_set(),
-            "break"
-        )[1]
+        lambda evento: (evento.widget.tk_focusPrev().focus_set(), "break")[1],
     )
-
-    # Conteúdo inicial do editor
     if texto_inicial is not None:
-        editor.insert("1.0", texto_inicial)
-        editor.edit_modified(False)
+        catalogo_editor.insert("1.0", texto_inicial)
+        catalogo_editor.edit_modified(False)
     else:
-        dados_iniciais = [
-            {
-                "id": produto.codigo,
-                "nome": produto.nome,
-                "preco_centavos": produto.preco_centavos
-            }
-            for produto in catalogo
-        ]
-        definir_editor(dados_iniciais)
+        definir_editor(dados_iniciais if dados_iniciais is not None else [])
 
     if catalogo:
         combo_produto.focus_set()
     else:
         notebook.select(aba_catalogo)
-
+        entrada_caminho.focus_set()
     return janela
 
 

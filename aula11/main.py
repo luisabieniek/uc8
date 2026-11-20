@@ -1,418 +1,350 @@
+"""A11 — pizzaria com confirmacao em Toplevel, versao de previa e comprovante."""
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
+from decimal import Decimal
+from modelos import Pizza, Bebida, Pedido, formatar, TAMANHOS
+from pagamento import calcular_pagamento, FATORES
 
-from modelos import Pizza, Bebida, Pedido
-from pagamento import formatar_dinheiro
-
-
-produtos = [
-    Pizza("P01", "Mussarela", "Média", 3500),
-    Pizza("P02", "Portuguesa", "Grande", 4500),
-    Bebida("B01", "Refrigerante", 600),
-    Bebida("B02", "Água", 400)
+CATALOGO = [
+    Pizza("PM1", "Mussarela",   "Media",  3500),
+    Pizza("PG1", "Mussarela",   "Grande", 4500),
+    Pizza("PM2", "Calabresa",   "Media",  3800),
+    Pizza("PG2", "Calabresa",   "Grande", 4800),
+    Pizza("PM3", "Frango",      "Media",  3600),
+    Pizza("PG3", "Frango",      "Grande", 4600),
+    Bebida("B01", "Suco",         600),
+    Bebida("B02", "Refrigerante", 500),
+    Bebida("B03", "Agua",         300),
 ]
 
 
+def _label_catalogo(produto):
+    tamanho = f" ({produto.tamanho})" if isinstance(produto, Pizza) else ""
+    return f"{produto.codigo}  {produto.nome}{tamanho}  {formatar(produto.preco_centavos)}"
+
+
+def redesenhar(tree, lbl_total, pedido):
+    tree.delete(*tree.get_children())
+    for item in pedido.itens:
+        tamanho = item.produto.tamanho if isinstance(item.produto, Pizza) else "-"
+        tree.insert(
+            "", tk.END,
+            iid=item.produto.codigo,
+            values=(
+                item.produto.codigo,
+                item.produto.nome,
+                tamanho,
+                item.quantidade,
+                formatar(item.subtotal()),
+            ),
+        )
+    total = pedido.total_centavos()
+    lbl_total.configure(text=f"Total: {formatar(total)}" if total else "Total: R$ 0,00")
+
+
+def codigo_selecionado(tree):
+    sel = tree.selection()
+    return sel[0] if sel else None
+
+
+def abrir_previa(janela, pedido, forma, aviso, tree, lbl_total, combo_produto):
+    """Abre Toplevel de confirmacao. Somente o botao Confirmar finaliza."""
+    if not pedido.itens:
+        aviso.configure(text="Pedido vazio. Adicione itens antes de confirmar.")
+        return
+
+    versao_previa = pedido.versao()
+
+    subtotal_texto = str(Decimal(pedido.total_centavos()) / 100)
+    try:
+        total_pag, desconto = calcular_pagamento(subtotal_texto, forma)
+    except ValueError as e:
+        aviso.configure(text=f"Recusado: {e}")
+        return
+
+    top = tk.Toplevel(janela)
+    top.title("Confirmar pedido")
+    top.resizable(False, False)
+    top.transient(janela)
+
+    frame = ttk.Frame(top, padding=14)
+    frame.grid(row=0, column=0, sticky="nsew")
+    frame.columnconfigure(0, weight=1)
+
+    ttk.Label(frame, text="Resumo do pedido", font=("", 10, "bold")).grid(
+        row=0, column=0, columnspan=2, pady=(0, 6), sticky="w")
+
+    for i, linha in enumerate(pedido.linhas()):
+        ttk.Label(frame, text=linha, wraplength=340).grid(
+            row=1 + i, column=0, columnspan=2, sticky="w")
+
+    sep_row = 1 + len(pedido.linhas())
+    ttk.Separator(frame, orient="horizontal").grid(
+        row=sep_row, column=0, columnspan=2, sticky="ew", pady=6)
+
+    ttk.Label(frame, text=f"Forma: {forma}").grid(
+        row=sep_row + 1, column=0, columnspan=2, sticky="w")
+    ttk.Label(frame, text=f"Total com desconto: {formatar(total_pag)}").grid(
+        row=sep_row + 2, column=0, columnspan=2, sticky="w")
+    ttk.Label(frame, text=f"Desconto: {formatar(desconto)}").grid(
+        row=sep_row + 3, column=0, columnspan=2, sticky="w", pady=(0, 8))
+
+    btn_row = sep_row + 4
+    frame.columnconfigure(0, weight=1)
+    frame.columnconfigure(1, weight=1)
+
+    def ao_confirmar():
+        try:
+            comprovante = pedido.finalizar(forma, versao_previa)
+            top.destroy()
+            mostrar_comprovante(janela, comprovante, aviso, tree, lbl_total,
+                                combo_produto)
+        except (ValueError, RuntimeError) as e:
+            top.destroy()
+            aviso.configure(text=f"Recusado: {e}")
+
+    def ao_cancelar_previa():
+        top.destroy()
+        aviso.configure(text="Confirmacao cancelada. Pedido preservado.")
+
+    btn_confirmar = ttk.Button(frame, text="Confirmar", command=ao_confirmar)
+    btn_confirmar.grid(row=btn_row, column=0, padx=(0, 4), pady=6, sticky="ew")
+
+    btn_cancelar = ttk.Button(frame, text="Cancelar", command=ao_cancelar_previa)
+    btn_cancelar.grid(row=btn_row, column=1, padx=(4, 0), pady=6, sticky="ew")
+
+    top.protocol("WM_DELETE_WINDOW", ao_cancelar_previa)
+    top.bind("<Escape>", lambda _: ao_cancelar_previa())
+
+    btn_cancelar.focus_set()
+    top.grab_set()
+
+
+def mostrar_comprovante(janela, comprovante, aviso, tree, lbl_total, combo_produto):
+    """Exibe comprovante em Toplevel apos confirmacao."""
+    top = tk.Toplevel(janela)
+    top.title("Comprovante")
+    top.resizable(False, False)
+    top.transient(janela)
+
+    frame = ttk.Frame(top, padding=14)
+    frame.grid(row=0, column=0, sticky="nsew")
+    frame.columnconfigure(0, weight=1)
+
+    ttk.Label(frame, text="Pedido confirmado", font=("", 10, "bold")).grid(
+        row=0, column=0, pady=(0, 6), sticky="w")
+
+    for i, linha in enumerate(comprovante.linhas):
+        ttk.Label(frame, text=linha, wraplength=340).grid(
+            row=1 + i, column=0, sticky="w")
+
+    sep_row = 1 + len(comprovante.linhas)
+    ttk.Separator(frame, orient="horizontal").grid(
+        row=sep_row, column=0, sticky="ew", pady=6)
+    ttk.Label(frame, text=f"Forma: {comprovante.forma}").grid(
+        row=sep_row + 1, column=0, sticky="w")
+    ttk.Label(frame, text=f"Total com desconto: {formatar(comprovante.total_pago_centavos)}").grid(
+        row=sep_row + 2, column=0, sticky="w", pady=(0, 8))
+
+    aviso.configure(text="Pedido confirmado. Clique em Novo pedido para comecar.")
+
+    def ao_fechar():
+        top.destroy()
+        combo_produto.focus_set()
+
+    ttk.Label(frame, text=f"Desconto: {formatar(comprovante.desconto_centavos)}").grid(
+        row=sep_row + 3, column=0, sticky="w")
+    ttk.Button(frame, text="Fechar", command=ao_fechar).grid(
+        row=sep_row + 4, column=0, pady=4)
+
+    top.protocol("WM_DELETE_WINDOW", ao_fechar)
+    top.bind("<Escape>", lambda _: ao_fechar())
+    top.grab_set()
+
+
 def criar_janela():
-    principal = tk.Tk()
-    principal.title("Pizzaria")
-    principal.geometry("750x600")
+    janela = tk.Tk()
+    janela.title("Pizzaria — A11")
+    janela.columnconfigure(0, weight=1)
+    janela.rowconfigure(0, weight=1)
+
+    base = ttk.Frame(janela, padding=12)
+    base.grid(row=0, column=0, sticky="nsew")
+    base.columnconfigure(0, weight=1)
 
     pedido = Pedido()
-    produto_selecionado = tk.StringVar()
-    quantidade = tk.StringVar(value="1")
-    forma_pagamento = tk.StringVar(value="PIX")
+    grupo_cat = ttk.LabelFrame(base, text="Catalogo", padding=6)
+    grupo_cat.grid(row=0, column=0, sticky="ew", pady=4)
+    grupo_cat.columnconfigure(0, weight=1)
 
-    produtos_por_codigo = {
-        produto.codigo: produto for produto in produtos
-    }
+    rotulos = [_label_catalogo(p) for p in CATALOGO]
+    combo_produto = ttk.Combobox(grupo_cat, values=rotulos, state="readonly")
+    combo_produto.grid(row=0, column=0, sticky="ew", padx=4, pady=4)
+    combo_produto.current(0)
+    grupo_qtd = ttk.LabelFrame(base, text="Quantidade", padding=6)
+    grupo_qtd.grid(row=1, column=0, sticky="ew", pady=4)
+    grupo_qtd.columnconfigure(1, weight=1)
 
-    # Catálogo
-    quadro_catalogo = ttk.LabelFrame(
-        principal,
-        text="Cardápio"
-    )
-    quadro_catalogo.pack(fill="x", padx=10, pady=10)
+    ttk.Label(grupo_qtd, text="Qtd:").grid(row=0, column=0, padx=6, pady=4, sticky="w")
+    entrada_qtd = ttk.Entry(grupo_qtd)
+    entrada_qtd.grid(row=0, column=1, padx=6, pady=4, sticky="ew")
 
-    tabela_catalogo = ttk.Treeview(
-        quadro_catalogo,
-        columns=("codigo", "nome", "preco"),
-        show="headings",
-        height=4
-    )
+    acoes = ttk.Frame(base)
+    acoes.grid(row=2, column=0, sticky="ew", pady=4)
+    for col in range(3):
+        acoes.columnconfigure(col, weight=1)
 
-    tabela_catalogo.heading("codigo", text="Código")
-    tabela_catalogo.heading("nome", text="Produto")
-    tabela_catalogo.heading("preco", text="Preço")
-
-    tabela_catalogo.column("codigo", width=100)
-    tabela_catalogo.column("nome", width=250)
-    tabela_catalogo.column("preco", width=120)
-
-    tabela_catalogo.pack(fill="x", padx=5, pady=5)
-
-    for produto in produtos:
-        tabela_catalogo.insert(
-            "",
-            "end",
-            iid=produto.codigo,
-            values=(
-                produto.codigo,
-                produto.nome,
-                formatar_dinheiro(
-                    produto.preco_centavos / 100
-                )
-            )
-        )
-
-    # Dados do item
-    quadro_item = ttk.Frame(principal)
-    quadro_item.pack(fill="x", padx=10, pady=5)
-
-    ttk.Label(
-        quadro_item,
-        text="Quantidade:"
-    ).pack(side="left")
-
-    campo_quantidade = ttk.Entry(
-        quadro_item,
-        textvariable=quantidade,
-        width=8
-    )
-    campo_quantidade.pack(side="left", padx=5)
-
-    # Pedido
-    quadro_pedido = ttk.LabelFrame(
-        principal,
-        text="Pedido atual"
-    )
-    quadro_pedido.pack(fill="both", expand=True, padx=10, pady=10)
-
-    tabela_pedido = ttk.Treeview(
-        quadro_pedido,
-        columns=("codigo", "nome", "quantidade", "subtotal"),
-        show="headings"
-    )
-
-    tabela_pedido.heading("codigo", text="Código")
-    tabela_pedido.heading("nome", text="Produto")
-    tabela_pedido.heading("quantidade", text="Quantidade")
-    tabela_pedido.heading("subtotal", text="Subtotal")
-
-    tabela_pedido.column("codigo", width=80)
-    tabela_pedido.column("nome", width=220)
-    tabela_pedido.column("quantidade", width=100)
-    tabela_pedido.column("subtotal", width=120)
-
-    tabela_pedido.pack(fill="both", expand=True, padx=5, pady=5)
-
-    texto_total = ttk.Label(
-        principal,
-        text="Total: R$ 0,00",
-        font=("Arial", 12, "bold")
-    )
-    texto_total.pack(pady=5)
-
-    # Atualização da tela
-    def atualizar_tela():
-        tabela_pedido.delete(*tabela_pedido.get_children())
-
-        for item in pedido.itens:
-            tabela_pedido.insert(
-                "",
-                "end",
-                iid=item.produto.codigo,
-                values=(
-                    item.produto.codigo,
-                    item.produto.nome,
-                    item.quantidade,
-                    formatar_dinheiro(item.subtotal() / 100)
-                )
-            )
-
-        texto_total.config(
-            text="Total: " + formatar_dinheiro(
-                pedido.calcular_total() / 100
-            )
-        )
-
-    # Seleção do produto
-    def codigo_selecionado():
-        selecao = tabela_catalogo.selection()
-
-        if not selecao:
-            raise ValueError("Selecione um produto do cardápio.")
-
-        return selecao[0]
-
-    # Adicionar produto
     def ao_adicionar():
+        produto = CATALOGO[combo_produto.current()]
         try:
-            codigo = codigo_selecionado()
-            quantidade_item = int(quantidade.get())
+            pedido.adicionar(produto, entrada_qtd.get())
+            aviso.configure(text=f"Adicionado: {produto.nome} x{entrada_qtd.get()}")
+            redesenhar(tree, lbl_total, pedido)
+            entrada_qtd.delete(0, tk.END)
+        except (ValueError, RuntimeError) as e:
+            aviso.configure(text=f"Recusado: {e}")
+        entrada_qtd.focus_set()
 
-            produto = produtos_por_codigo[codigo]
-
-            pedido.adicionar(produto, quantidade_item)
-            atualizar_tela()
-
-        except ValueError as erro:
-            messagebox.showwarning("Atenção", str(erro))
-
-    # Atualizar quantidade
     def ao_atualizar():
+        codigo = codigo_selecionado(tree)
+        if not codigo:
+            aviso.configure(text="Selecione um item na tabela para atualizar.")
+            return
         try:
-            selecao = tabela_pedido.selection()
+            pedido.atualizar(codigo, entrada_qtd.get())
+            aviso.configure(text=f"Atualizado: {codigo} -> x{entrada_qtd.get()}")
+            redesenhar(tree, lbl_total, pedido)
+            entrada_qtd.delete(0, tk.END)
+        except (ValueError, RuntimeError) as e:
+            aviso.configure(text=f"Recusado: {e}")
+        entrada_qtd.focus_set()
 
-            if not selecao:
-                raise ValueError("Selecione um item do pedido.")
-
-            codigo = selecao[0]
-            quantidade_item = int(quantidade.get())
-
-            pedido.atualizar(codigo, quantidade_item)
-            atualizar_tela()
-
-        except ValueError as erro:
-            messagebox.showwarning("Atenção", str(erro))
-
-    # Remover produto
     def ao_remover():
-        try:
-            selecao = tabela_pedido.selection()
-
-            if not selecao:
-                raise ValueError("Selecione um item do pedido.")
-
-            pedido.remover(selecao[0])
-            atualizar_tela()
-
-        except ValueError as erro:
-            messagebox.showwarning("Atenção", str(erro))
-
-    # Botões do pedido
-    quadro_botoes = ttk.Frame(principal)
-    quadro_botoes.pack(pady=5)
-
-    ttk.Button(
-        quadro_botoes,
-        text="Adicionar",
-        command=ao_adicionar
-    ).pack(side="left", padx=5)
-
-    ttk.Button(
-        quadro_botoes,
-        text="Atualizar",
-        command=ao_atualizar
-    ).pack(side="left", padx=5)
-
-    ttk.Button(
-        quadro_botoes,
-        text="Remover",
-        command=ao_remover
-    ).pack(side="left", padx=5)
-
-    # Pagamento
-    quadro_pagamento = ttk.LabelFrame(
-        principal,
-        text="Pagamento"
-    )
-    quadro_pagamento.pack(fill="x", padx=10, pady=10)
-
-    ttk.Label(
-        quadro_pagamento,
-        text="Forma de pagamento:"
-    ).pack(side="left", padx=5)
-
-    opcoes_pagamento = ttk.Combobox(
-        quadro_pagamento,
-        textvariable=forma_pagamento,
-        values=["Dinheiro", "PIX", "Débito", "Crédito"],
-        state="readonly",
-        width=15
-    )
-    opcoes_pagamento.pack(side="left", padx=5)
-
-    # Comprovante
-    def mostrar_comprovante(comprovante):
-        janela = tk.Toplevel(principal)
-        janela.title("Comprovante")
-        janela.geometry("400x400")
-
-        ttk.Label(
-            janela,
-            text="COMPROVANTE DO PEDIDO",
-            font=("Arial", 13, "bold")
-        ).pack(pady=10)
-
-        for item in comprovante.itens:
-            texto = (
-                f"{item['quantidade']}x {item['nome']} - "
-                f"{formatar_dinheiro(item['subtotal'] / 100)}"
-            )
-
-            ttk.Label(janela, text=texto).pack(anchor="w", padx=15)
-
-        ttk.Separator(janela).pack(fill="x", padx=10, pady=10)
-
-        pagamento = comprovante.pagamento
-
-        ttk.Label(
-            janela,
-            text=f"Forma: {pagamento['forma']}"
-        ).pack(pady=3)
-
-        ttk.Label(
-            janela,
-            text=f"Total: {formatar_dinheiro(pagamento['total'])}"
-        ).pack(pady=3)
-
-        ttk.Label(
-            janela,
-            text=f"Valor final: {formatar_dinheiro(pagamento['valor_final'])}",
-            font=("Arial", 11, "bold")
-        ).pack(pady=5)
-
-        ttk.Button(
-            janela,
-            text="Fechar",
-            command=janela.destroy
-        ).pack(pady=10)
-
-    # Prévia do pedido
-    def abrir_previa():
-        if not pedido.itens:
-            messagebox.showwarning(
-                "Pedido",
-                "Adicione pelo menos um produto."
-            )
+        codigo = codigo_selecionado(tree)
+        if not codigo:
+            aviso.configure(text="Selecione um item na tabela para remover.")
             return
-
-        versao_previa = pedido.versao()
-
-        janela_previa = tk.Toplevel(principal)
-        janela_previa.title("Prévia do pedido")
-        janela_previa.geometry("400x350")
-
-        ttk.Label(
-            janela_previa,
-            text="Confira seu pedido",
-            font=("Arial", 13, "bold")
-        ).pack(pady=10)
-
-        for item in pedido.itens:
-            ttk.Label(
-                janela_previa,
-                text=(
-                    f"{item.quantidade}x {item.produto.nome} - "
-                    f"{formatar_dinheiro(item.subtotal() / 100)}"
-                )
-            ).pack(anchor="w", padx=15)
-
-        pagamento = forma_pagamento.get()
-
         try:
-            from pagamento import calcular_pagamento
+            pedido.remover(codigo)
+            aviso.configure(text=f"Removido: {codigo}")
+            redesenhar(tree, lbl_total, pedido)
+        except (ValueError, RuntimeError) as e:
+            aviso.configure(text=f"Recusado: {e}")
 
-            resultado = calcular_pagamento(
-                pedido.calcular_total(),
-                pagamento
-            )
+    ttk.Button(acoes, text="Adicionar", command=ao_adicionar).grid(
+        row=0, column=0, padx=4, pady=6, sticky="ew")
+    ttk.Button(acoes, text="Atualizar", command=ao_atualizar).grid(
+        row=0, column=1, padx=4, pady=6, sticky="ew")
+    ttk.Button(acoes, text="Remover",   command=ao_remover).grid(
+        row=0, column=2, padx=4, pady=6, sticky="ew")
 
-        except ValueError as erro:
-            messagebox.showwarning("Pagamento", str(erro))
-            janela_previa.destroy()
-            return
+    entrada_qtd.bind("<Return>", lambda _: ao_adicionar())
 
-        ttk.Separator(janela_previa).pack(
-            fill="x",
-            padx=10,
-            pady=10
-        )
+    grupo_ped = ttk.LabelFrame(base, text="Pedido", padding=6)
+    grupo_ped.grid(row=3, column=0, sticky="nsew", pady=4)
+    grupo_ped.columnconfigure(0, weight=1)
+    grupo_ped.rowconfigure(0, weight=1)
+    base.rowconfigure(3, weight=1)
 
-        ttk.Label(
-            janela_previa,
-            text=f"Forma: {pagamento}"
-        ).pack()
+    colunas = ("codigo", "nome", "tamanho", "qtd", "subtotal")
+    tree = ttk.Treeview(
+        grupo_ped, columns=colunas, show="headings",
+        height=6, selectmode="browse",
+    )
+    tree.heading("codigo",   text="Codigo")
+    tree.heading("nome",     text="Nome")
+    tree.heading("tamanho",  text="Tamanho")
+    tree.heading("qtd",      text="Qtd")
+    tree.heading("subtotal", text="Subtotal")
+    tree.column("codigo",   width=55,  anchor="center")
+    tree.column("nome",     width=110, anchor="w")
+    tree.column("tamanho",  width=70,  anchor="center")
+    tree.column("qtd",      width=45,  anchor="center")
+    tree.column("subtotal", width=95,  anchor="e")
+    tree.grid(row=0, column=0, sticky="nsew")
 
-        ttk.Label(
-            janela_previa,
-            text=f"Total: {formatar_dinheiro(resultado['total'])}"
-        ).pack()
+    scroll = ttk.Scrollbar(grupo_ped, orient="vertical", command=tree.yview)
+    scroll.grid(row=0, column=1, sticky="ns")
+    tree.configure(yscrollcommand=scroll.set)
 
-        ttk.Label(
-            janela_previa,
-            text=f"Valor final: {formatar_dinheiro(resultado['valor_final'])}",
-            font=("Arial", 11, "bold")
-        ).pack(pady=5)
+    tree.bind("<Return>", lambda _: ao_atualizar())
+    tree.bind("<Delete>", lambda _: ao_remover())
 
-        # Confirmar pedido
-        def confirmar():
-            try:
-                comprovante = pedido.finalizar(
-                    pagamento,
-                    versao_previa
-                )
+    lbl_total = ttk.Label(base, text="Total: R$ 0,00", font=("", 10, "bold"))
+    lbl_total.grid(row=4, column=0, sticky="e", padx=4, pady=2)
 
-                janela_previa.destroy()
-                mostrar_comprovante(comprovante)
-                atualizar_tela()
+    grupo_pag = ttk.LabelFrame(base, text="Pagamento", padding=6)
+    grupo_pag.grid(row=5, column=0, sticky="ew", pady=4)
+    grupo_pag.columnconfigure(1, weight=1)
 
-            except ValueError as erro:
-                messagebox.showwarning("Pedido", str(erro))
-                janela_previa.destroy()
+    ttk.Label(grupo_pag, text="Forma:").grid(row=0, column=0, padx=6, pady=4, sticky="w")
+    combo_forma = ttk.Combobox(grupo_pag, values=list(FATORES.keys()), state="readonly")
+    combo_forma.grid(row=0, column=1, padx=6, pady=4, sticky="ew")
+    combo_forma.current(0)
 
-        quadro_confirmacao = ttk.Frame(janela_previa)
-        quadro_confirmacao.pack(pady=15)
+    acoes_pag = ttk.Frame(grupo_pag)
+    acoes_pag.grid(row=1, column=0, columnspan=2, sticky="ew", pady=4)
+    acoes_pag.columnconfigure(0, weight=1)
+    acoes_pag.columnconfigure(1, weight=1)
 
-        ttk.Button(
-            quadro_confirmacao,
-            text="Confirmar",
-            command=confirmar
-        ).pack(side="left", padx=5)
+    def ao_confirmar_pedido():
+        abrir_previa(janela, pedido, combo_forma.get(), aviso,
+                     tree, lbl_total, combo_produto)
 
-        ttk.Button(
-            quadro_confirmacao,
-            text="Cancelar",
-            command=janela_previa.destroy
-        ).pack(side="left", padx=5)
-
-        janela_previa.bind(
-            "<Escape>",
-            lambda evento: janela_previa.destroy()
-        )
-
-    # Novo pedido
-    def novo_pedido():
+    def ao_novo_pedido():
         if pedido.itens:
-            resposta = messagebox.askyesno(
-                "Novo pedido",
-                "Deseja descartar o pedido atual?"
-            )
+            top = tk.Toplevel(janela)
+            top.title("Descartar pedido?")
+            top.resizable(False, False)
+            top.transient(janela)
 
-            if not resposta:
-                return
+            frame = ttk.Frame(top, padding=14)
+            frame.grid(row=0, column=0, sticky="nsew")
+            frame.columnconfigure(0, weight=1)
+            frame.columnconfigure(1, weight=1)
 
-        pedido.novo()
-        atualizar_tela()
+            ttk.Label(frame, text="Descartar a montagem atual e comecar um novo pedido?",
+                      wraplength=300).grid(row=0, column=0, columnspan=2, pady=(0, 10))
 
-    quadro_final = ttk.Frame(principal)
-    quadro_final.pack(pady=10)
+            def ao_descartar():
+                pedido.novo()
+                redesenhar(tree, lbl_total, pedido)
+                aviso.configure(text="Novo pedido iniciado.")
+                top.destroy()
+                combo_produto.focus_set()
 
-    ttk.Button(
-        quadro_final,
-        text="Conferir pedido",
-        command=abrir_previa
-    ).pack(side="left", padx=5)
+            def ao_manter():
+                top.destroy()
+                aviso.configure(text="Descarte cancelado. Montagem preservada.")
+                combo_produto.focus_set()
 
-    ttk.Button(
-        quadro_final,
-        text="Novo pedido",
-        command=novo_pedido
-    ).pack(side="left", padx=5)
+            ttk.Button(frame, text="Descartar", command=ao_descartar).grid(
+                row=1, column=0, padx=(0, 4), sticky="ew")
+            btn_manter = ttk.Button(frame, text="Manter", command=ao_manter)
+            btn_manter.grid(row=1, column=1, padx=(4, 0), sticky="ew")
 
-    principal.mainloop()
+            top.protocol("WM_DELETE_WINDOW", ao_manter)
+            top.bind("<Escape>", lambda _: ao_manter())
+            btn_manter.focus_set()   
+            top.grab_set()
+        else:
+            pedido.novo()
+            redesenhar(tree, lbl_total, pedido)
+            aviso.configure(text="Novo pedido iniciado.")
+            combo_produto.focus_set()
+
+    ttk.Button(acoes_pag, text="Confirmar pedido", command=ao_confirmar_pedido).grid(
+        row=0, column=0, padx=(0, 4), sticky="ew")
+    ttk.Button(acoes_pag, text="Novo pedido", command=ao_novo_pedido).grid(
+        row=0, column=1, padx=(4, 0), sticky="ew")
+
+    aviso = ttk.Label(base, text="Selecione um produto e informe a quantidade.",
+                      wraplength=430)
+    aviso.grid(row=6, column=0, pady=6, sticky="w")
+
+    combo_produto.focus_set()
+    return janela
 
 
 if __name__ == "__main__":
-    criar_janela()
+    criar_janela().mainloop()

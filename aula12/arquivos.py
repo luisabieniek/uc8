@@ -1,134 +1,53 @@
-
-"""A12 — leitura, validação e gravação do catálogo JSON."""
-
 import json
 import os
 import tempfile
 from pathlib import Path
-
 from modelos import Produto
 
 
 def validar_catalogo(dados):
     if not isinstance(dados, list):
-        raise ValueError("Catálogo deve ser uma lista.")
+        raise ValueError("O catálogo deve ser uma lista de produtos.")
 
-    ids_vistos = set()
-
-    for indice, item in enumerate(dados):
+    codigos = set()
+    for numero, item in enumerate(dados, start=1):
         if not isinstance(item, dict):
-            raise ValueError(f"Item {indice} deve ser um objeto.")
+            raise ValueError(f"Produto {numero}: informe um objeto JSON.")
 
-        for campo in ("id", "nome", "preco_centavos"):
-            if campo not in item:
-                raise ValueError(
-                    f"Item {indice} sem o campo '{campo}'."
-                )
+        codigo = item.get("id")
+        nome = item.get("nome")
+        preco = item.get("preco_centavos")
+        if not isinstance(codigo, str) or not isinstance(nome, str):
+            raise ValueError(f"Produto {numero}: id e nome devem ser textos.")
 
-        codigo = item["id"]
-        nome = item["nome"]
-        preco = item["preco_centavos"]
-
-        if type(codigo) not in (str, int):
-            raise ValueError(
-                f"Item {indice}: ID deve ser texto ou inteiro."
-            )
-
-        if not isinstance(nome, str) or not nome.strip():
-            raise ValueError(
-                f"Item {indice}: nome não pode ser vazio."
-            )
-
-        if type(preco) is not int or preco <= 0:
-            raise ValueError(
-                f"Item {indice}: preço deve ser inteiro positivo."
-            )
-
-        codigo_texto = str(codigo).strip()
-
-        if not codigo_texto:
-            raise ValueError(f"Item {indice}: ID não pode ser vazio.")
-
-        if codigo_texto in ids_vistos:
-            raise ValueError(f"ID repetido: {codigo_texto}.")
-
-        ids_vistos.add(codigo_texto)
-
-    return dados
+        produto = Produto(codigo, nome, preco)
+        if produto.codigo in codigos:
+            raise ValueError(f"Código repetido: {produto.codigo}.")
+        codigos.add(produto.codigo)
 
 
 def ler_catalogo(caminho):
-    caminho = Path(caminho)
-
-    if not caminho.exists():
-        return None
-
     try:
-        texto = caminho.read_text(encoding="utf-8")
-        dados = json.loads(texto)
-
-    except (UnicodeDecodeError, json.JSONDecodeError) as erro:
-        raise ValueError(
-            f"JSON inválido em '{caminho}': {erro}"
-        ) from erro
-
-    return validar_catalogo(dados)
-
-
-def carregar_catalogo(caminho):
-    dados = ler_catalogo(caminho)
-
-    if dados is None:
-        return False, "Arquivo não encontrado", []
-
-    produtos = []
-
-    for item in dados:
-        produto = Produto(
-            item["id"],
-            item["nome"],
-            item["preco_centavos"]
-        )
-        produtos.append(produto)
-
-    return True, "Catálogo carregado", produtos
+        with Path(caminho).open(encoding="utf-8") as arquivo:
+            dados = json.load(arquivo)
+    except FileNotFoundError:
+        return None
+    validar_catalogo(dados)
+    return dados
 
 
 def salvar_catalogo(caminho, dados):
-    caminho = Path(caminho)
-
     validar_catalogo(dados)
-
-    texto = json.dumps(
-        dados,
-        ensure_ascii=False,
-        indent=4
-    )
-
-    if not caminho.parent.exists():
-        raise FileNotFoundError(
-            "A pasta de destino não existe."
-        )
-
-    arquivo_temporario = None
-
+    caminho = Path(caminho)
+    temporario = None
     try:
-        descritor, arquivo_temporario = tempfile.mkstemp(
-            dir=caminho.parent,
-            suffix=".tmp"
-        )
-
-        with os.fdopen(
-            descritor,
-            "w",
-            encoding="utf-8"
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=caminho.parent, delete=False
         ) as arquivo:
-            arquivo.write(texto)
-
-        os.replace(arquivo_temporario, caminho)
-
-    except Exception:
-        if arquivo_temporario and os.path.exists(arquivo_temporario):
-            os.unlink(arquivo_temporario)
-
-        raise
+            temporario = Path(arquivo.name)
+            json.dump(dados, arquivo, ensure_ascii=False, indent=4)
+            arquivo.write("\n")
+        os.replace(temporario, caminho)
+    finally:
+        if temporario is not None:
+            temporario.unlink(missing_ok=True)

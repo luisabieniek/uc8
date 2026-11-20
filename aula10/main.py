@@ -68,7 +68,6 @@ def criar_janela():
 
     pedido = Pedido()
 
-    # Grupo do catalogo
     grupo_catalogo = ttk.LabelFrame(
         base, text="Catalogo", padding=10
     )
@@ -85,7 +84,6 @@ def criar_janela():
     combo_produto.grid(row=0, column=0, padx=6, pady=4, sticky="ew")
     combo_produto.current(0)
 
-    # Grupo da quantidade
     grupo_quantidade = ttk.LabelFrame(
         base, text="Quantidade", padding=10
     )
@@ -99,13 +97,11 @@ def criar_janela():
     entrada_qtd = ttk.Entry(grupo_quantidade)
     entrada_qtd.grid(row=0, column=1, padx=6, pady=4, sticky="ew")
 
-    # Grupo dos botoes
     acoes = ttk.Frame(base, padding=5)
     acoes.grid(row=2, column=0, sticky="ew", pady=4)
 
     acoes.columnconfigure((0, 1, 2), weight=1)
 
-    # Grupo do pedido
     grupo_pedido = ttk.LabelFrame(
         base, text="Pedido", padding=10
     )
@@ -146,7 +142,6 @@ def criar_janela():
     scroll.grid(row=0, column=1, sticky="ns")
     tree.configure(yscrollcommand=scroll.set)
 
-    # Total do pedido
     lbl_total = ttk.Label(
         base,
         text="Total: R$ 0,00",
@@ -154,7 +149,6 @@ def criar_janela():
     )
     lbl_total.grid(row=4, column=0, sticky="e", padx=4, pady=4)
 
-    # Grupo do pagamento
     grupo_pagamento = ttk.LabelFrame(
         base, text="Previa de pagamento", padding=10
     )
@@ -180,7 +174,6 @@ def criar_janela():
     )
     lbl_previa.grid(row=1, column=0, columnspan=2, padx=6, pady=4, sticky="w")
 
-    # Funcoes dos botoes
     def ao_adicionar():
         produto = CATALOGO[combo_produto.current()]
         quantidade = entrada_qtd.get()
@@ -263,7 +256,6 @@ def criar_janela():
             lbl_previa.configure(text="")
             aviso.configure(text=f"Recusado: {e}")
 
-    # Botoes do pedido
     ttk.Button(
         acoes, text="Adicionar", command=ao_adicionar
     ).grid(row=0, column=0, padx=4, pady=6, sticky="ew")
@@ -286,7 +278,6 @@ def criar_janela():
     tree.bind("<Return>", lambda event: ao_atualizar())
     tree.bind("<Delete>", lambda event: ao_remover())
 
-    # Aviso
     aviso = ttk.Label(
         base,
         text="Selecione um produto e informe a quantidade.",

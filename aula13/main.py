@@ -1,5 +1,4 @@
 """A13 — pizzaria com pedido, abas, catálogo JSON e Relatórios CSV."""
-import os
 import csv
 import json
 import tkinter as tk
@@ -9,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from arquivos import ler_catalogo, salvar_catalogo, validar_catalogo
 from modelos import Pedido, Produto, formatar
-from relatorios import registrar_venda_csv
+from relatorios import COLUNAS, registrar_venda_csv
 from pagamento import calcular_pagamento, FATORES
 from perfis import SessaoDemo
 
@@ -76,22 +75,7 @@ def abrir_previa(janela, pedido, forma, aviso, tree, lbl_total, combo_produto):
 
     sep_row = 1 + len(pedido.linhas())
     ttk.Separator(frame, orient="horizontal").grid(
-        row=sep_row +4, column=0, columnspan=2, sticky="ew", pady=6)
-
-    ttk.Label(frame,text="Registro CSV que será gerado: ",
-              font=("",9,"bold")).grid(
-        row=sep_row+5, column=0, columnspan=2, sticky="w")
-    
-    from datetime import datetime
-    linha_csv = (
-        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')};"
-        f"{forma};"
-        f"{total_pag};"
-        f"{total_pag // 100}.{total_pag % 100:02d}"
-    )
-
-    ttk.Label(frame,text=linha_csv,wraplength=340).grid(
-        row=sep_row+6,column=0,columnspan=2,sticky="w")
+        row=sep_row, column=0, columnspan=2, sticky="ew", pady=6)
 
     ttk.Label(frame, text=f"Forma: {forma}").grid(
         row=sep_row + 1, column=0, columnspan=2, sticky="w")
@@ -100,7 +84,7 @@ def abrir_previa(janela, pedido, forma, aviso, tree, lbl_total, combo_produto):
     ttk.Label(frame, text=f"Desconto: {formatar(desconto)}").grid(
         row=sep_row + 3, column=0, columnspan=2, sticky="w", pady=(0, 8))
 
-    btn_row = sep_row + 7
+    btn_row = sep_row + 4
     frame.columnconfigure(0, weight=1)
     frame.columnconfigure(1, weight=1)
 
@@ -112,22 +96,16 @@ def abrir_previa(janela, pedido, forma, aviso, tree, lbl_total, combo_produto):
             aviso.configure(text=f"Recusado: {erro}")
             return
 
+        erro_csv = None
         try:
             registrar_venda_csv(comprovante, CAMINHO_VENDAS)
-        except (OSError, csv.Error) as erro:
-            aviso.configure(
-                text=f"Pedido confirmado, mas não foi possível registrar no CSV: {erro}"
-            )
+        except (OSError, UnicodeError, csv.Error, ValueError) as erro:
+            erro_csv = str(erro)
 
         top.destroy()
-        mostrar_comprovante(
-            janela,
-            comprovante,
-            aviso,
-            tree,
-            lbl_total,
-            combo_produto
-        )
+        mostrar_comprovante(janela, comprovante, aviso, tree, lbl_total, combo_produto)
+        if erro_csv is not None:
+            aviso.configure(text=f"Pedido confirmado. Falha ao registrar a venda: {erro_csv}")
 
     def ao_cancelar_previa():
         # X, Escape e Cancelar: apenas fecha, nao altera o pedido
@@ -171,7 +149,7 @@ def mostrar_comprovante(janela, comprovante, aviso, tree, lbl_total, combo_produ
         row=sep_row, column=0, sticky="ew", pady=6)
     ttk.Label(frame, text=f"Forma: {comprovante.forma}").grid(
         row=sep_row + 1, column=0, sticky="w")
-    ttk.Label(frame, text=f"Total com desconto: {formatar(comprovante.total_centavos)}").grid(
+    ttk.Label(frame, text=f"Total com desconto: {formatar(comprovante.total_pago_centavos)}").grid(
         row=sep_row + 2, column=0, sticky="w", pady=(0, 8))
 
     aviso.configure(text="Pedido confirmado. Clique em Novo pedido para comecar.")
@@ -180,8 +158,10 @@ def mostrar_comprovante(janela, comprovante, aviso, tree, lbl_total, combo_produ
         top.destroy()
         combo_produto.focus_set()
 
+    ttk.Label(frame, text=f"Desconto: {formatar(comprovante.desconto_centavos)}").grid(
+        row=sep_row + 3, column=0, sticky="w")
     ttk.Button(frame, text="Fechar", command=ao_fechar).grid(
-        row=sep_row + 3, column=0, pady=4)
+        row=sep_row + 4, column=0, pady=4)
 
     top.protocol("WM_DELETE_WINDOW", ao_fechar)
     top.bind("<Escape>", lambda _: ao_fechar())
@@ -284,12 +264,7 @@ def criar_janela():
     aba_csv.columnconfigure(0,weight=1)
     aba_csv.rowconfigure(1, weight=1)
 
-    colunas_csv=(
-        "data_hora",
-        "forma_pagamento",
-        "total_centavos",
-        "total_reais",
-    )
+    colunas_csv = COLUNAS
 
     tree_csv = ttk.Treeview(
         aba_csv,
@@ -723,42 +698,6 @@ def criar_janela():
             text=f"Catálogo salvo: {len(dados)} produto(s). Pedido preservado."
         )
         combo_produto.focus_set()
-
-    def abrir_vendas():
-        janela_vendas = tk.Toplevel(janela)
-        janela_vendas.title("Vendas")
-
-        colunas = ("data_hora","forma_pagamento","total_centavos","total_reais")
-        tree = ttk.Treeview(janela_vendas, columns=colunas, show="headings")
-
-        tree.heading("data_hora",text="Data e Hora")
-        tree.heading("forma_pagamento", text="Forma de Pagamento")
-        tree.heading("total_centavos", text="Total em Centavos")
-        tree.heading("total_reais", text="Valor (R$)")
-
-        tree.column("data_hora",width=180,anchor="center")
-        tree.column("forma_pagamento", width=120, anchor="center")
-        tree.column("total_centavos", width=100, anchor="center")
-        tree.column("total_reais", width=100, anchor="center")
-
-        try:
-            with open("vendas.csv",newline="",encoding="utf-8") as arquivo_csv:
-                leitor = csv.DictReader(arquivo_csv)
-                for linha in leitor:
-                    tree.insert("", tk.END,values=(
-                        linha["data_hora"],
-                        linha["forma_pagamento"],
-                        linha["total_centavos"],
-                        linha["total_reais"]
-                    ))
-        except FileNotFoundError:
-            messagebox.showerror("Erro","Arquivo vendas.csv não encontrado.")
-            return
-        except KeyError:
-            messagebox.showerror("Erro","Arquivo vendas.csv inválido.")
-            return
-
-        tree.pack(fill=tk.BOTH, expand=True)
 
     def abrir_csv():
         tree_csv.delete(*tree_csv.get_children())

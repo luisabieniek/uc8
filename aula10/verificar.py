@@ -232,7 +232,6 @@ def verificar_pagamento_regressao():
     assert total == 4089
     assert desconto == 611
 
-    # A previa nao altera o pedido.
     assert pedido.total_centavos() == 4700
 
     return True

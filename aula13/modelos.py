@@ -1,165 +1,139 @@
-"""A13 — classes do pedido e dos produtos da pizzaria."""
+from pagamento import calcular_pagamento
 
-from dataclasses import dataclass
-from decimal import Decimal
-
-from pagamento import calcular_pagamento, para_centavos
+TAMANHOS = ("Media", "Grande")
 
 
 def formatar(centavos):
-    """Formata um valor inteiro em centavos como moeda brasileira."""
-    centavos = int(centavos)
     sinal = "-" if centavos < 0 else ""
-    centavos = abs(centavos)
-    reais = centavos // 100
-    parte_centavos = centavos % 100
-    return f"{sinal}R$ {reais:,}".replace(",", ".") + f",{parte_centavos:02d}"
+    reais, resto = divmod(abs(centavos), 100)
+    return f"R$ {sinal}{reais},{resto:02d}"
 
 
-@dataclass(frozen=True)
 class Produto:
-    codigo: str
-    nome: str
-    preco_centavos: int
-
-    def __post_init__(self):
-        codigo = str(self.codigo).strip()
-        nome = str(self.nome).strip()
-
-        if not codigo:
-            raise ValueError("O código do produto não pode ficar vazio.")
-        if not nome:
-            raise ValueError("O nome do produto não pode ficar vazio.")
-        if isinstance(self.preco_centavos, bool) or not isinstance(
-            self.preco_centavos, int
-        ):
-            raise ValueError("O preço deve ser informado em centavos inteiros.")
-        if self.preco_centavos <= 0:
-            raise ValueError("O preço deve ser maior que zero.")
-
-        object.__setattr__(self, "codigo", codigo)
-        object.__setattr__(self, "nome", nome)
+    def __init__(self, codigo, nome, preco_centavos):
+        codigo = codigo.strip()
+        nome = nome.strip()
+        if not codigo or not nome:
+            raise ValueError("Informe código e nome.")
+        if type(preco_centavos) is not int or preco_centavos <= 0:
+            raise ValueError("O preço deve ser um inteiro positivo em centavos.")
+        self.codigo = codigo
+        self.nome = nome
+        self.preco_centavos = preco_centavos
 
 
-@dataclass
+class Pizza(Produto):
+    def __init__(self, codigo, nome, tamanho, preco_centavos):
+        if tamanho not in TAMANHOS:
+            raise ValueError("Tamanho inválido.")
+        super().__init__(codigo, nome, preco_centavos)
+        self.tamanho = tamanho
+
+
+class Bebida(Produto):
+    pass
+
+
+def validar_quantidade(texto):
+    texto = texto.strip()
+    if not texto.isascii() or not texto.isdecimal():
+        raise ValueError("Informe uma quantidade inteira positiva.")
+    quantidade = int(texto)
+    if quantidade <= 0:
+        raise ValueError("Informe uma quantidade inteira positiva.")
+    return quantidade
+
+
 class Item:
-    produto: Produto
-    quantidade: int
+    def __init__(self, produto, texto_quantidade):
+        self.produto = produto
+        self.quantidade = validar_quantidade(texto_quantidade)
 
     def subtotal(self):
         return self.produto.preco_centavos * self.quantidade
 
 
-@dataclass(frozen=True)
 class Comprovante:
-    linhas: tuple
-    forma: str
-    subtotal_centavos: int
-    desconto_centavos: int
-    total_centavos: int
+    def __init__(self, linhas, total_centavos, forma):
+        self.linhas = linhas.copy()
+        self.total_centavos = total_centavos
+        self.forma = forma
+        subtotal = f"{total_centavos // 100}.{total_centavos % 100:02d}"
+        self.total_pago_centavos, self.desconto_centavos = calcular_pagamento(subtotal, forma)
 
 
 class Pedido:
     def __init__(self):
+        self._contador = 0
+        self.novo()
+
+    def novo(self):
         self.itens = []
+        self.aberto = True
         self._versao = 0
-        self._finalizado = False
 
-    def _verificar_aberto(self):
-        if self._finalizado:
-            raise RuntimeError("Este pedido já foi confirmado. Inicie um novo pedido.")
+    def versao(self):
+        return self._versao
 
-    @staticmethod
-    def _ler_quantidade(valor):
-        texto = str(valor).strip()
-        if not texto.isdigit():
-            raise ValueError("A quantidade deve ser um número inteiro positivo.")
+    def _registrar_alteracao(self):
+        self._contador += 1
+        self._versao = self._contador
 
-        quantidade = int(texto)
-        if quantidade <= 0:
-            raise ValueError("A quantidade deve ser maior que zero.")
-        return quantidade
+    def _conferir_aberto(self):
+        if not self.aberto:
+            raise RuntimeError("Pedido já finalizado.")
 
-    def adicionar(self, produto, quantidade):
-        self._verificar_aberto()
-
-        if not isinstance(produto, Produto):
-            raise ValueError("Selecione um produto válido.")
-
-        qtd = self._ler_quantidade(quantidade)
-
+    def _buscar(self, codigo):
         for item in self.itens:
-            if item.produto.codigo == produto.codigo:
-                item.quantidade += qtd
-                self._versao += 1
-                return
+            if item.produto.codigo == codigo:
+                return item
+        return None
 
-        self.itens.append(Item(produto, qtd))
-        self._versao += 1
+    def adicionar(self, produto, texto_quantidade):
+        self._conferir_aberto()
+        novo_item = Item(produto, texto_quantidade)
+        item = self._buscar(produto.codigo)
+        if item is None:
+            self.itens.append(novo_item)
+        else:
+            item.quantidade += novo_item.quantidade
+        self._registrar_alteracao()
 
-    def atualizar(self, codigo, quantidade):
-        self._verificar_aberto()
-        qtd = self._ler_quantidade(quantidade)
-
-        for item in self.itens:
-            if item.produto.codigo == str(codigo):
-                item.quantidade = qtd
-                self._versao += 1
-                return
-
-        raise ValueError("O produto selecionado não está no pedido.")
+    def atualizar(self, codigo, texto_quantidade):
+        self._conferir_aberto()
+        item = self._buscar(codigo)
+        if item is None:
+            raise ValueError("O produto nao esta no pedido.")
+        item.quantidade = validar_quantidade(texto_quantidade)
+        self._registrar_alteracao()
 
     def remover(self, codigo):
-        self._verificar_aberto()
-
-        for indice, item in enumerate(self.itens):
-            if item.produto.codigo == str(codigo):
-                del self.itens[indice]
-                self._versao += 1
-                return
-
-        raise ValueError("O produto selecionado não está no pedido.")
+        self._conferir_aberto()
+        item = self._buscar(codigo)
+        if item is None:
+            raise ValueError("O produto nao esta no pedido.")
+        self.itens.remove(item)
+        self._registrar_alteracao()
 
     def total_centavos(self):
         return sum(item.subtotal() for item in self.itens)
 
     def linhas(self):
-        return [
-            f"{item.produto.nome} x{item.quantidade} — "
-            f"{formatar(item.subtotal())}"
-            for item in self.itens
-        ]
+        linhas = []
+        for item in self.itens:
+            produto = item.produto
+            nome = produto.nome
+            if isinstance(produto, Pizza):
+                nome = f"{nome} ({produto.tamanho})"
+            linhas.append(f"{item.quantidade} x {nome} — {formatar(item.subtotal())}")
+        return linhas
 
-    def versao(self):
-        return self._versao
-
-    def finalizar(self, forma, versao_esperada=None):
-        self._verificar_aberto()
-
+    def finalizar(self, forma, versao_previa):
+        self._conferir_aberto()
         if not self.itens:
-            raise ValueError("Não é possível confirmar um pedido vazio.")
-
-        if versao_esperada is not None and versao_esperada != self._versao:
-            raise RuntimeError(
-                "O pedido foi alterado depois da prévia. Gere a prévia novamente."
-            )
-
-        subtotal = self.total_centavos()
-        valor = f"{Decimal(subtotal) / Decimal(100):.2f}"
-        total, desconto = calcular_pagamento(valor, forma)
-
-        comprovante = Comprovante(
-            linhas=tuple(self.linhas()),
-            forma=forma,
-            subtotal_centavos=subtotal,
-            desconto_centavos=desconto,
-            total_centavos=total,
-        )
-        self._finalizado = True
-        self._versao += 1
+            raise ValueError("Pedido vazio.")
+        if versao_previa != self.versao():
+            raise ValueError("O pedido foi alterado. Abra uma nova prévia.")
+        comprovante = Comprovante(self.linhas(), self.total_centavos(), forma)
+        self.aberto = False
         return comprovante
-
-    def novo(self):
-        self.itens.clear()
-        self._finalizado = False
-        self._versao += 1
